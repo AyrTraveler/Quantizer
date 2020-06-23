@@ -1,7 +1,7 @@
 # Quantizer
 
 Quantizer is a desktop application that applies automatic editing to .wav files.
-The app is built using the JUCE framework, starting from the audio playback demo.
+The app is built using the [JUCE](www.juce.com) framework, starting from the audio playback demo.
 
 The user can:
 
