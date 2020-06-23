@@ -10,16 +10,17 @@ The user can:
 - modify the output path and output file name. A standard path is generated whenever a new file is dragged and dropped
 - zoom in/out the wave form using the horizontal slider or the scrollbar
 
-In order to edit/time align the file, the user **must**:
+Before applying the time aligning algorithm the user **must** firs set the following parameters:
 
-- set the Samplerate (must be an integer)
-- set the track BPM (must be an integer)
-- set the output bit depth (16, 24 bit)
-- set the time resolution (i.e. 16th, 32nd, ...)
+- Samplerate (must be an integer)
+- BPM (must be an integer)
+- Output bit depth (16, 24 bit)
+- Time resolution (i.e. 16th, 32nd, ...)
 - specify if the audio file contains triplets
 
-If all the above parameters are correctly set next steps are:
+If all the above parameters are correctly set, the user needs to:
 
-- choose the threshold level using the vertical slider Bar and draw the transients by clicking the **Peak** button;
-- once the transient are drawn within the thumbnail, click the **Quantize** button to save the new edited .wav file at the selected path.
+- choose the threshold level using the vertical slider Bar
+- click the **Peak** button to draw the transient markers;
+- click the **Quantize** button to save the new edited .wav file at the selected path.
 
