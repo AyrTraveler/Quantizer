@@ -10,411 +10,18 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "TimeContainerInfo.h"
-
+#include "Thumbnail.h"
+#include "CustomLookAndFeel.h"
 
 #include <iostream>
 #include <fstream>
 using namespace std;
 
 
-struct CustomLookAndFeel : public LookAndFeel_V4
-{
 
-    void drawTickBox(Graphics& g, Component& component,
-        float x, float y, float w, float h,
-        const bool ticked,
-        const bool isEnabled,
-        const bool shouldDrawButtonAsHighlighted,
-        const bool shouldDrawButtonAsDown)
-    {
-        ignoreUnused(isEnabled, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
-        Rectangle<float> tickBounds(x, y, w, h);
-        Colour c;
-        g.setColour(c.fromRGB(38, 46, 57));
-        g.drawRect(tickBounds,1.5f);
 
-        if (ticked)
-        {
-            g.setColour(component.findColour(ToggleButton::tickColourId));
-            auto tick = getTickShape(0.75f);
-            g.fillPath(tick, tick.getTransformToScaleToFit(tickBounds.reduced(4, 5).toFloat(), false));
-        }
-    }
 
-    void drawButtonText(Graphics& g, TextButton& button,
-        bool /*shouldDrawButtonAsHighlighted*/, bool /*shouldDrawButtonAsDown*/)
-    {
-        Font font(getTextButtonFont(button, button.getHeight()));
-        g.setFont(font);
-        g.setFont(font.getHeight()+4);
-        g.setColour(button.findColour(button.getToggleState() ? TextButton::textColourOnId
-            : TextButton::textColourOffId)
-            .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.5f));
-
-        const int yIndent = jmin(4, button.proportionOfHeight(0.3f));
-        const int cornerSize = jmin(button.getHeight(), button.getWidth()) / 2;
-
-        const int fontHeight = roundToInt(font.getHeight() * 0.6f);
-        const int leftIndent = jmin(fontHeight, 2 + cornerSize / (button.isConnectedOnLeft() ? 4 : 2));
-        const int rightIndent = jmin(fontHeight, 2 + cornerSize / (button.isConnectedOnRight() ? 4 : 2));
-        const int textWidth = button.getWidth() - leftIndent - rightIndent;
-
-        if (textWidth > 0)
-            g.drawFittedText(button.getButtonText(),
-                leftIndent, yIndent, textWidth, button.getHeight() - yIndent * 2,
-                Justification::centred, 2);
-    }
-
-
-    void fillTextEditorBackground(Graphics& g, int width, int height, TextEditor& textEditor)
-    {
-        if (dynamic_cast<AlertWindow*> (textEditor.getParentComponent()) != nullptr)
-        {
-            g.setColour(textEditor.findColour(TextEditor::backgroundColourId));
-            g.fillRect(0, 0, width, height);
-
-            g.setColour(textEditor.findColour(TextEditor::outlineColourId));
-            g.drawHorizontalLine(height - 1, 0.0f, static_cast<float> (width));
-        }
-        else
-        {
-            LookAndFeel_V2::fillTextEditorBackground(g, width, height, textEditor);
-        }
-    }
-
-    void drawComboBox(Graphics& g, int width, int height, bool,
-        int, int, int, int, ComboBox& box) override
-    {
-        auto cornerSize = box.findParentComponentOfClass<ChoicePropertyComponent>() != nullptr ? 0.0f : 3.0f;
-        Rectangle<int> boxBounds(0, 0, width, height);
-
-       
-    }
-
-    void drawPopupMenuBackground(Graphics& g, int width, int height) override
-    {
-        //g.fillAll(findColour(PopupMenu::backgroundColourId));
-        Colour c;
-        g.fillAll(c.fromRGB(38, 46, 57));
-        ignoreUnused(width, height);
-
-
-    }
-
-    void drawTextEditorOutline(Graphics& g, int width, int height, TextEditor& textEditor)
-    {
-        if (dynamic_cast<AlertWindow*> (textEditor.getParentComponent()) == nullptr)
-        {
-            if (textEditor.isEnabled())
-            {
-                if (textEditor.hasKeyboardFocus(true) && !textEditor.isReadOnly())
-                {
-                    g.setColour(textEditor.findColour(TextEditor::backgroundColourId).brighter(0.1f));
-                    g.drawRect(0, 0, width, height, 2);
-                }
-                else
-                {
-                    g.setColour(textEditor.findColour(TextEditor::backgroundColourId).brighter(0.1f));
-                    g.drawRect(0, 0, width, height);
-                }
-            }
-        }
-    }
-
-};
-
-
-
-
-
-class DemoThumbnailComp : public Component,
-    public ChangeListener,
-    public FileDragAndDropTarget,
-    public ChangeBroadcaster,
-    private ScrollBar::Listener,
-    private Timer
-{
-public:
-    DemoThumbnailComp(AudioFormatManager& formatManager,
-        AudioTransportSource& source,
-        Slider& slider)
-        : transportSource(source),
-        zoomSlider(slider),
-        thumbnail(512, formatManager, thumbnailCache)
-        
-    {
-        thumbnail.addChangeListener(this);
-
-        addAndMakeVisible(scrollbar);
-        scrollbar.setRangeLimits(visibleRange);
-        scrollbar.setAutoHide(false);
-        scrollbar.addListener(this);
-
-        currentPositionMarker.setFill(Colours::red.withAlpha(0.45f));
-        addAndMakeVisible(currentPositionMarker);
-
-        currentLevel.setFill(Colours::lightblue);
-        addAndMakeVisible(currentLevel);
-    }
-
-    ~DemoThumbnailComp()
-    {
-        scrollbar.removeListener(this);
-        thumbnail.removeChangeListener(this);
-    }
-
-    void setURL(const URL& url)
-    {
-        InputSource* inputSource = nullptr;
-
-#if ! JUCE_IOS
-        if (url.isLocalFile())
-        {
-            inputSource = new FileInputSource(url.getLocalFile());
-        }
-        else
-#endif
-        {
-            if (inputSource == nullptr)
-                inputSource = new URLInputSource(url);
-        }
-
-        if (inputSource != nullptr)
-        {
-            thumbnail.setSource(inputSource);
-
-            Range<double> newRange(0.0, thumbnail.getTotalLength());
-            scrollbar.setRangeLimits(newRange);
-            setRange(newRange);
-
-            startTimerHz(40);
-        }
-    }
-
-    URL getLastDroppedFile() const noexcept { return lastFileDropped; }
-
-    void setZoomFactor(double amount)
-    {
-        if (thumbnail.getTotalLength() > 0)
-        {
-            auto newScale = jmax(0.001, thumbnail.getTotalLength() * (1.0 - jlimit(0.0, 0.99, amount)));
-            auto timeAtCentre = xToTime(getWidth() / 2.0f);
-
-            setRange({ timeAtCentre - newScale * 0.5, timeAtCentre + newScale * 0.5 });
-        }
-    }
-
-    void setRange(Range<double> newRange)
-    {
-        visibleRange = newRange;
-        scrollbar.setCurrentRange(visibleRange);
-        updateCursorPosition();
-        repaint();
-    }
-
-    void setFollowsTransport(bool shouldFollow)
-    {
-        isFollowingTransport = shouldFollow;
-    }
-
-    void paint(Graphics& g) override
-    {
-       
-
-        Colour c;
-
-        g.fillAll(c.fromRGB(38, 46, 57));
-
-        g.setColour((Colours::orange).withAlpha(0.5f));
-       
-        
-
-        if (thumbnail.getTotalLength() > 0.0)
-        {
-            auto thumbArea = getLocalBounds();
-
-            thumbArea.removeFromBottom(scrollbar.getHeight() + 4);
-            thumbnail.drawChannel(g, thumbArea.reduced(2),visibleRange.getStart(), visibleRange.getEnd(),0, 1.0f);
-        }
-        else
-        {
-            auto myFont = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
-            Font cfont = Font(myFont);
-            cfont.setHeight(cfont.getHeight() * 0.8f);
-            g.setFont(cfont.withExtraKerningFactor(0.095f));
-            g.setFont(34.0f);
-
-            g.drawFittedText("Drag a .wav file here", getLocalBounds(), Justification::centred, 2);
-        }
-    }
-
-    void resized() override
-    {
-        scrollbar.setBounds(getLocalBounds().removeFromBottom(14).reduced(2));
-        Colour c;
-        c.fromRGB(38, 46, 57).darker(0.5f);
-        scrollbar.setColour(scrollbar.thumbColourId, c.fromRGB(38, 46, 57).darker(0.5f));
-        
-    }
-
-    void changeListenerCallback(ChangeBroadcaster*) override
-    {
-        // this method is called by the thumbnail when it has changed, so we should repaint it..
-        repaint();
-    }
-
-    bool isInterestedInFileDrag(const StringArray& /*files*/) override
-    {
-        return true;
-    }
-
-    void filesDropped(const StringArray& files, int /*x*/, int /*y*/) override
-    {
-        lastFileDropped = URL(File(files[0]));
-        
-        sendSynchronousChangeMessage();
-    }
-
-    
-
-    void mouseDown(const MouseEvent& event) override
-    {
-
-        mouseDrag(event);
-        auto duration = transportSource.getLengthInSeconds();
-
-        if (duration > 0.0)
-        {
-            auto clickPosition = event.position.x;
-            auto audioPosition = (clickPosition / getWidth()) * duration;
-
-            transportSource.setPosition(audioPosition);
-            posY = event.position.y;
-        }
-    }
-
-    void mouseDrag(const MouseEvent& e) override
-    {
-        if (canMoveTransport())
-            transportSource.setPosition(jmax(0.0, xToTime((float)e.x)));
-    }
-
-    void mouseUp(const MouseEvent&) override
-    {
-       // transportSource.start();
-    }
-
-    void mouseWheelMove(const MouseEvent&, const MouseWheelDetails& wheel) override
-    {
-        if (thumbnail.getTotalLength() > 0.0)
-        {
-            auto newStart = visibleRange.getStart() - wheel.deltaX * (visibleRange.getLength()) / 10.0;
-            newStart = jlimit(0.0, jmax(0.0, thumbnail.getTotalLength() - (visibleRange.getLength())), newStart);
-
-            if (canMoveTransport())
-                setRange({ newStart, newStart + visibleRange.getLength() });
-
-            if (wheel.deltaY != 0.0f)
-                zoomSlider.setValue(zoomSlider.getValue() - wheel.deltaY);
-
-            repaint();
-        }
-    }
-
-    void paintMarkers(TimeContainerInfo* tci, int samplerate) {
-        
-        float pos = (float)tci->tpk / (float)samplerate;
-        peakMarkers.add(new DrawableRectangle());
-        Colour c;
-        peakMarkers.getLast()->setFill(c.fromRGB(13,57,176));
-        addAndMakeVisible(*peakMarkers.getLast());
-        
-        peakMarkers.getLast()->setRectangle(Rectangle<float>(timeToX(pos) - 0.75f, 0,
-            1.0f, (float)(getHeight() - scrollbar.getHeight())));
-        
-    }
-
-    void drawLevel(float level, float maxChannel) {
-
-        auto thumbArea = getLocalBounds();
-        thumbArea.removeFromBottom(scrollbar.getHeight() + 4);
-        auto b = thumbArea.reduced(2).getHeight();
-        auto c = juce::jmap(maxChannel,0.0f,1.0f,0.0f, (float)b / 2);
-        float a = juce::jmap(level,0.0f,1.0f,(float)b/2, (float)b / 2-c);
-        currentLevel.setRectangle(Rectangle<float>(0, a, (float)getWidth(), 1.5f));
-    }
-
- OwnedArray<DrawableRectangle> peakMarkers;
- Range<double> visibleRange;
- DrawableRectangle currentLevel;
-float posY;
-double position = 0;
-private:
-
-    
-    AudioTransportSource& transportSource;
-    Slider& zoomSlider;
-    ScrollBar scrollbar{ false };
-
-    AudioThumbnailCache thumbnailCache{ 5 };
-    AudioThumbnail thumbnail;
-   
-    bool isFollowingTransport = false;
-    URL lastFileDropped;
-    
-    DrawableRectangle currentPositionMarker;
-   
-    float timeToX(const double time) const
-    {
-        if (visibleRange.getLength() <= 0)
-            return 0;
-
-        return getWidth() * (float)((time - visibleRange.getStart()) / visibleRange.getLength());
-    }
-
-
-
-    double xToTime(const float x) const
-    {
-        return (x / getWidth()) * (visibleRange.getLength()) + visibleRange.getStart();
-    }
-
-    bool canMoveTransport() const noexcept
-    {
-        return !(isFollowingTransport && transportSource.isPlaying());
-    }
-
-    void scrollBarMoved(ScrollBar* scrollBarThatHasMoved, double newRangeStart) override
-    {
-        if (scrollBarThatHasMoved == &scrollbar)
-            if (!(isFollowingTransport && transportSource.isPlaying()))
-                setRange(visibleRange.movedToStartAt(newRangeStart));
-    }
-
-    void timerCallback() override
-    {
-
-        
-        if (canMoveTransport())
-            updateCursorPosition();
-        else
-            setRange(visibleRange.movedToStartAt(transportSource.getCurrentPosition() - (visibleRange.getLength() / 2.0)));
-
- 
-    }
-
-    void updateCursorPosition()
-    {
-       
-        position = transportSource.isPlaying()? transportSource.getCurrentPosition():position;
-       
-        currentPositionMarker.setRectangle(Rectangle<float>(timeToX(position) - 0.75f, 0,
-            1.0f, (float)(getHeight() - scrollbar.getHeight())));
-
-      
-    }
-};
 
 
 
@@ -537,10 +144,7 @@ public:
         isPeaking = false;
         };
 
-        addAndMakeVisible(&openButton);
-        openButton.setButtonText("Open");
-        openButton.setTooltip("Open file");
-        openButton.onClick = [this] { openButtonClicked(); };
+        
 
        
 
@@ -552,7 +156,7 @@ public:
         addAndMakeVisible(&pauseImageButton);
 
 
-        openImageButton.onClick = [this] {openButtonClicked(); };
+        
         playImageButton.onClick = [this] {playButtonClicked(); };
         stopImageButton.onClick = [this] {stopButtonClicked(); };
         pauseImageButton.onClick = [this] {pauseButtonClicked(); };
@@ -583,7 +187,30 @@ public:
         shutdownAudio();
     }
 
-  
+   void paint(Graphics& g) override
+    {
+        Colour c;
+        g.fillAll(c.fromRGB(15,18,22));
+    }
+
+    void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override
+    {
+        transportSource.prepareToPlay(samplesPerBlockExpected, sampleRate);
+    }
+
+    void getNextAudioBlock(const AudioSourceChannelInfo& bufferToFill) override
+    {
+        if (readerSource.get() == nullptr)
+            bufferToFill.clearActiveBufferRegion();
+        else
+            transportSource.getNextAudioBlock(bufferToFill);
+    }
+
+    void releaseResources() override
+    {
+        transportSource.releaseResources();
+    }
+
     String remap(float a, float b) {
 
 
@@ -635,30 +262,9 @@ public:
 
     }
 
-    void paint(Graphics& g) override
-    {
-        Colour c;
-        g.fillAll(c.fromRGB(15,18,22));
-    }
+   
 
-    void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override
-    {
-        transportSource.prepareToPlay(samplesPerBlockExpected, sampleRate);
-    }
-
-    void getNextAudioBlock(const AudioSourceChannelInfo& bufferToFill) override
-    {
-        if (readerSource.get() == nullptr)
-            bufferToFill.clearActiveBufferRegion();
-        else
-            transportSource.getNextAudioBlock(bufferToFill);
-    }
-
-    void releaseResources() override
-    {
-        transportSource.releaseResources();
-    }
-
+   
     void resized() override
     {
 
@@ -673,10 +279,6 @@ public:
 
         int offsetY = 100;
         
-        
-
-
-    
         resolution.setText("Resolution", dontSendNotification);
         rate.setText("Sample Rate", dontSendNotification);
         beats.setText("BPM", dontSendNotification);
@@ -1117,8 +719,6 @@ public:
         writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
 
 
-       
-
         ofstream myfile;
         myfile.open("example.txt");
        
@@ -1128,8 +728,7 @@ public:
             pivot->clear();
             reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
             int current = 0;
-
-            
+        
 
         for (int i = 0; i < tci.size(); i++) {
            
@@ -1148,7 +747,6 @@ public:
             int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
             int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
            
-      
             
 
             if (tci.operator[](i)->tbk == tci.operator[](i)->tpk && i==0) { //INIT FIRST PEAK
@@ -1317,70 +915,7 @@ private:
             
     }
 
-    void changeState(TransportState newState)
-    {
-        if (state != newState)
-        {
-            state = newState;
-
-            switch (state)
-            {
-            case Stopped:
-                stopButton.setEnabled(false);
-                playButton.setEnabled(true);
-                transportSource.setPosition(0.0);
-                break;
-
-            case Starting:
-                playButton.setEnabled(false);
-                transportSource.start();
-                break;
-
-            case Playing:
-                stopButton.setEnabled(true);
-                break;
-
-            case Stopping:
-                transportSource.stop();
-                break;
-
-            default:
-                jassertfalse;
-                break;
-            }
-        }
-    }
-
-    void transportSourceChanged()
-    {
-        if (transportSource.isPlaying())
-            changeState(Playing);
-        else
-            changeState(Stopped);
-    }
-
-    void openButtonClicked()
-    {
-        FileChooser chooser("Select a Wave file to play...",
-            {},
-            "*.wav;*.mp3");
-
-        if (chooser.browseForFileToOpen())
-        {
-            File file = chooser.getResult();
-            opened = chooser.getResult();
-            showAudioResource(URL(file));
-            if (auto* reader = formatManager.createReaderFor(file))
-            {
-                std::unique_ptr<AudioFormatReaderSource> newSource(new AudioFormatReaderSource(reader, true));
-                transportSource.setSource(newSource.get(), 0, nullptr, reader->sampleRate);
-                playButton.setEnabled(true);
-                
-                
-                readerSource.reset(newSource.release());
-            }
-        }
-    }
+  
 
     void playButtonClicked()
     {
