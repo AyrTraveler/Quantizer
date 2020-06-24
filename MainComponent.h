@@ -737,7 +737,7 @@ public:
         int y_off = 45;
         int leftContentX = 1;
         int rightContentX = 1;
-
+        //dummy comment
         resolution.setBounds(leftLabelX, labelY,100,30);
         resolution.setJustificationType(Justification::right);
         resolutionCbox.setBounds(leftLabelX + 120, labelY, 80, 25);
