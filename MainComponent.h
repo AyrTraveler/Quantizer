@@ -9,7 +9,7 @@
 #pragma once
 
 #include "../JuceLibraryCode/JuceHeader.h"
-
+#include "TimeContainerInfo.h"
 
 
 #include <iostream>
@@ -124,28 +124,8 @@ struct CustomLookAndFeel : public LookAndFeel_V4
 
 };
 
-class TimeContainerInfo {
 
 
-public:
-
-    TimeContainerInfo(int tpk, int tbk)
-        : tbk(tbk), tpk(tpk)
-    {
-
-        anticipo = tbk > tpk ? true : false;
-        delta_t = abs(tbk - tpk);
-        fade = (int)(delta_t / 4.0);
-    };
-
-    bool anticipo, bypassa = false;
-    int tpk, tbk, delta_t, fade;
-
-
-
-
-
-};
 
 
 class DemoThumbnailComp : public Component,
