@@ -639,9 +639,8 @@ public:
 
             if (tci.operator[](i)->tbk == tci.operator[](i)->tpk && i==0) { //INIT FIRST PEAK
             
-                int starting = (tci.operator[](i + 1)->anticipo) ? tci.operator[](i + 1)->tpk : tci.operator[](i + 1)->tbk - tci.operator[](i + 1)->fade;
-                float fd_square = tci.operator[](i + 1)->fade * tci.operator[](i + 1)->fade;
-                int fd = tci.operator[](i + 1)->fade;
+                starting = (tci.operator[](i + 1)->anticipo) ? tci.operator[](i + 1)->tpk : tci.operator[](i + 1)->tbk - tci.operator[](i + 1)->fade;
+               
 
                 if (writer != nullptr)
                     writer->writeFromAudioSampleBuffer(*buffer, tci.operator[](i)->tpk, starting - tci.operator[](i)->tpk);
@@ -656,6 +655,7 @@ public:
                 }
 
                 if (writer != nullptr)
+                // non dovrebbe essere *pivot, 0 ?
                     writer->writeFromAudioSampleBuffer(*pivot, starting - fd, fd);
                 
                 pivot->clear();
