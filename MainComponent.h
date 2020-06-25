@@ -17,14 +17,6 @@
 #include <fstream>
 using namespace std;
 
-
-
-
-
-
-
-
-
 //------------------------------------------------------------------------------
 
 class MainComponent : public AudioAppComponent,
@@ -42,16 +34,9 @@ public:
     {
 
 
-
         startTimerHz(2);
-
         addAndMakeVisible(gainLabel);
         addAndMakeVisible(gainText);
-        Value sharedValue;
-        sharedValue = Random::getSystemRandom().nextDouble() * 100;
-        sGain.getValueObject().referTo(sharedValue);
-        sGainLeft.getValueObject().referTo(sharedValue);
-
         addAndMakeVisible(sGainLeft);
         addAndMakeVisible(resolution);
         addAndMakeVisible(rate);
@@ -64,26 +49,31 @@ public:
         addAndMakeVisible(outputDirTE);
         addAndMakeVisible(resolutionCbox);
         addAndMakeVisible(bitsCbox);
-        
-     
         addAndMakeVisible(useTriplets);
         addAndMakeVisible(outputDirTE);
-
-        sGain.onValueChange = [this] {
-            
-            float q = remapValue(sGainLeft.getValue(), maxChannel);
-            
-            dtc.drawLevel(sGain.getValue(), maxChannel);
-            
-           if(!dtc.getLastDroppedFile().isEmpty()) gainText.setText(remap(sGain.getValue(), maxChannel),dontSendNotification); 
+        addAndMakeVisible(s);
+        addAndMakeVisible(&dtc);
+        addAndMakeVisible(&quantizeButton);
+        addAndMakeVisible(&detectButton);
+        addAndMakeVisible(&playImageButton);
+        addAndMakeVisible(&stopImageButton);
+        addAndMakeVisible(&pauseImageButton);
+        addAndMakeVisible(sGain);
         
+        Value sharedValue;
+        sharedValue = Random::getSystemRandom().nextDouble() * 100;
+        sGain.getValueObject().referTo(sharedValue);
+        sGainLeft.getValueObject().referTo(sharedValue);
+        
+        sGain.onValueChange = [this] {
+            float q = remapValue(sGainLeft.getValue(), maxChannel);
+            dtc.drawLevel(sGain.getValue(), maxChannel);
+           if(!dtc.getLastDroppedFile().isEmpty()) gainText.setText(remap(sGain.getValue(), maxChannel),dontSendNotification); 
         };
 
 
         sGainLeft.onValueChange = [this] {
             float q = remapValue(sGainLeft.getValue(), maxChannel);
-           
-
             dtc.drawLevel(sGain.getValue(), maxChannel);
             if (!dtc.getLastDroppedFile().isEmpty()) gainText.setText(remap(sGain.getValue(), maxChannel), dontSendNotification); };
 
@@ -97,19 +87,14 @@ public:
         resolutionCbox.addItem("1/16", 4);
         resolutionCbox.setSelectedItemIndex(2);
 
-     
+           s.setRange(0,1,0);
+           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue());  specificMarkers(); };
+           s.setSkewFactor(2);
+           s.setSliderStyle(Slider::LinearHorizontal);
+           s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+           s.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
 
-              addAndMakeVisible(s);
-              s.setRange(0,1,0);
-              s.onValueChange = [this] { dtc.setZoomFactor(s.getValue());  specificMarkers(); };
-
-              s.setSkewFactor(2);
-              s.setSliderStyle(Slider::LinearHorizontal);
-              s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-              addAndMakeVisible(&dtc);
-              s.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
-
-              addAndMakeVisible(sGain);
+             
               sGain.setRange(0, 1, 0);
               Colour barCol;
               sGain.setSliderStyle(Slider::LinearBarVertical);
@@ -124,15 +109,12 @@ public:
               sGainLeft.setColour(Slider::textBoxOutlineColourId, barCol.fromRGB(38, 46, 57));
               sGainLeft.setColour(Slider::trackColourId, barCol.fromRGB(38, 46, 57));
 
-             
-             
-        
-        addAndMakeVisible(&quantizeButton);
+       
         quantizeButton.setButtonText("Quantize");
         quantizeButton.onClick = [this] { quantize((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
         quantizeButton.setEnabled(false);
 
-        addAndMakeVisible(&detectButton);
+        
         detectButton.setButtonText("Peaks");
         detectButton.onClick = [this] {
             float q = remapValue(sGainLeft.getValue(), maxChannel);
@@ -143,18 +125,6 @@ public:
         loopMarkers();
         isPeaking = false;
         };
-
-        
-
-       
-
-       
-
-        addAndMakeVisible(&openImageButton);
-        addAndMakeVisible(&playImageButton);
-        addAndMakeVisible(&stopImageButton);
-        addAndMakeVisible(&pauseImageButton);
-
 
         
         playImageButton.onClick = [this] {playButtonClicked(); };
@@ -211,6 +181,8 @@ public:
         transportSource.releaseResources();
     }
 
+  
+    
     String remap(float a, float b) {
 
 
@@ -267,18 +239,12 @@ public:
    
     void resized() override
     {
-
-       
-       auto myFont = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
-       
-      
-      
-     
+ 
+        auto myFont = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
         LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypeface(myFont);
         Font newFont = Font(myFont);
 
         int offsetY = 100;
-        
         resolution.setText("Resolution", dontSendNotification);
         rate.setText("Sample Rate", dontSendNotification);
         beats.setText("BPM", dontSendNotification);
@@ -290,7 +256,6 @@ public:
         Font cfont = Font(myFont);
         cfont.setHeight(cfont.getHeight() * 0.8f);
     
-
         resolution.setFont(cfont.withExtraKerningFactor(0.15f));
         rate.setFont(cfont.withExtraKerningFactor(0.15f));
         beats.setFont(cfont.withExtraKerningFactor(0.15f));
@@ -311,15 +276,13 @@ public:
         BPMTE.setFont(18);
         samplerateTE.setFont(18);
 
-        
-
         int leftLabelX = 45;
         int rightLabelX = 310;
         int labelY = 420;
         int y_off = 45;
         int leftContentX = 1;
         int rightContentX = 1;
-        //dummy comment
+        
         resolution.setBounds(leftLabelX, labelY,100,30);
         resolution.setJustificationType(Justification::right);
         resolutionCbox.setBounds(leftLabelX + 120, labelY, 80, 25);
@@ -349,11 +312,7 @@ public:
         BPMTE.setText("118", dontSendNotification);
         BPMTE.setJustification(Justification::centred);
       
-       
-
         Colour c;
-
-        
         resolution.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
         rate.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
         beats.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
@@ -363,22 +322,12 @@ public:
         gainLabel.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
         gainText.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.3f));
 
-      
-
         Rectangle<int> sliderBounds(60, 410-offsetY, getWidth() - 120, 30);
         s.setBounds(sliderBounds);
-
-
         Rectangle<int> dtcBounds(60, 20, getWidth() - 120, 250+130 - offsetY);
         dtc.setBounds(dtcBounds);
-
-        
-       
-
-
         Rectangle<int> sGainBounds(getWidth() - 40, 20,20 , 250+130 - offsetY);
         sGain.setBounds(sGainBounds);
-
         Rectangle<int> sGainLeftBounds(20, 20, 20, 250 + 130 - offsetY);
         sGainLeft.setBounds(sGainLeftBounds);
 
@@ -405,7 +354,6 @@ public:
         pause_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
         pause_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
 
-
         playImageButton.setImages(play_image, play_over, play_over, play_dis, play_over, play_over, play_over, play_dis);
         stopImageButton.setImages(stop_image, stop_over, stop_over, stop_dis, stop_over, stop_over, stop_over, stop_dis);
         pauseImageButton.setImages(pause_image, pause_over, pause_over, pause_dis, pause_over, pause_over, pause_over, pause_dis);
@@ -416,35 +364,22 @@ public:
         stopImageButton.setClickingTogglesState(true);
         pauseImageButton.setClickingTogglesState(true);
 
-
-      
         quantizeButton.setBounds(getWidth() - 120, 600, 80 , 34);
         detectButton.setBounds(getWidth() - 210, 600,80, 34);
         playImageButton.setBounds((getWidth()-140)/2+ 100, 445 - offsetY, 40, 40);
         pauseImageButton.setBounds((getWidth() - 140) / 2 + 50, 445 - offsetY, 40, 40);
         stopImageButton.setBounds((getWidth() - 140) / 2 , 445 - offsetY, 40, 40);
 
-        
-        if (!dtc.getLastDroppedFile().isEmpty()) {
-
-            dtc.drawLevel(sGain.getValue(), maxChannel);
-        }
+        if (!dtc.getLastDroppedFile().isEmpty()) { dtc.drawLevel(sGain.getValue(), maxChannel);}
        
-      
     }
 
 
      void showAudioResource(URL resource)
     {
-       
-        if (loadURLIntoTransport(resource))
-            currentAudioFile =  std::move(resource);
-
-
+        if (loadURLIntoTransport(resource)) currentAudioFile =  std::move(resource);
         s.setValue(0, dontSendNotification);
         dtc.setURL(currentAudioFile);
-    
-      
     }
 
 
@@ -455,34 +390,17 @@ public:
         transportSource.stop();
         transportSource.setSource(nullptr);
         currentAudioFileSource.reset();
-
         AudioFormatReader* reader = nullptr;
-
-     
-        if (audioURL.isLocalFile())
-        {
-            reader = formatManager.createReaderFor(audioURL.getLocalFile());
-          
-            
-        }
+ 
+        if (audioURL.isLocalFile()) { reader = formatManager.createReaderFor(audioURL.getLocalFile());}
        
-    
-
         if (reader != nullptr)
         {
-
             readerSource.reset(new AudioFormatReaderSource(reader, true));
-
-           
             transportSource.setSource(readerSource.get(),
                                        32768,                   // tells it to buffer this many samples ahead
                                        &thread,                 // this is the background thread to use for reading-ahead
                                        reader->sampleRate);     // allows for sample rate correction
-
-           
-     
-
-
             return true;
         }
 
@@ -554,14 +472,9 @@ public:
         bool checkSR = samplerate >= 44100 && samplerate < 200000;
         bool checkDiv = ((int)divider % 2 == 0 && divider <= 4)||divider==0.5f;
 
-         
-
         if (!checkBPM || !checkDiv || !checkSR || !(dtc.getLastDroppedFile().toString(false).length()>0)) return;
-
-    
-       
-       
-       tci.clear(true);
+  
+        tci.clear(true);
         
         /*TIME INFO*/
         float BPS = BPM / 60.0F;
@@ -570,7 +483,6 @@ public:
         int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
         const float bufferLength = 512.0f;
         const float threshold = 0.04f;
-
 
         /*LEGGO FILE WAV*/
         AudioFormatManager formatManager;
@@ -587,26 +499,18 @@ public:
         /*TEST*/
         AudioSampleBuffer* bufferTemp = new AudioBuffer<float>(2, samplerate * 5);
         reader->readMaxLevels(0, reader->lengthInSamples,minR, maxR, minL, maxL);
-        
         maxChannel = maxL;
-
         reader->read(bufferTemp, 0, bufferTemp->getNumSamples(), 0, true, true);
-       
         float const* samples = bufferTemp->getReadPointer(0);
-
-
         while (fabs(samples[k]) < 3 * threshold) k += 1;
-
         initSample = k;
-
         tci.add(new TimeContainerInfo(initSample, initSample));
 
         int counter = initSample;
         float preMax = 100;
-
-
         float min = 10.0f;
         float prevRMS = 0.0f;
+     
         while (counter < reader->lengthInSamples) {
 
             AudioSampleBuffer* bufferTemp2 = new AudioBuffer<float>(2, bufferLength);
@@ -615,42 +519,29 @@ public:
             min = maxL < min ? maxL : min;
             if ((preMax<threshold && maxL > threshold) || (maxL - preMax) > 0.1) { //INIZIO TRANSIENT
 
-                AudioSampleBuffer* bufferTemp3 = new AudioBuffer<float>(2, bufferLength);
-                reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter - bufferLength, true, true);
-                bufferTemp3->clear();
+            AudioSampleBuffer* bufferTemp3 = new AudioBuffer<float>(2, bufferLength);
+            reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter - bufferLength, true, true);
+            bufferTemp3->clear();
 
-                reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter, true, true);
-               
-                delete bufferTemp3;
+            reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter, true, true);
+            delete bufferTemp3;
 
-
-                float const* samples = bufferTemp2->getReadPointer(0);
+            float const* samples = bufferTemp2->getReadPointer(0);
 
                 for (int i = 0; i < bufferTemp2->getNumSamples(); ++i)
                 {
 
                     if (fabs(samples[i]) == maxL) {
 
-
                         int running = 0;
-                        while (running * realSampleQuantum < counter + i - initSample) {
-                            running += 1;
-                        }
-
-
+                        while (running * realSampleQuantum < counter + i - initSample) {running += 1;}
                         float howManyQuantums = (float)(counter + i - initSample) / sampleQuantum;
                         float mantissa = howManyQuantums - floor(howManyQuantums);
                         int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
-
-
-
-
                         tci.add(new TimeContainerInfo(counter + i, tbk + initSample));
                         break;
                     }
-
-                }
-
+              }
             }
             counter += bufferLength;
             preMax = maxL;
@@ -704,7 +595,6 @@ public:
     {
         String fname = fileName.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
-
         if (!isWav) return;
        
         /*LEGGO FILE WAV*/
@@ -730,7 +620,7 @@ public:
             int current = 0;
         
 
-        for (int i = 0; i < tci.size(); i++) {
+            for (int i = 0; i < tci.size(); i++) {
            
             bool anticipo = tci.operator[](i)->anticipo;
             int tpk = tci.operator[](i)->tpk;
@@ -746,8 +636,6 @@ public:
             int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->fade:tci.operator[](i+1)->fade;
             int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
             int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
-           
-            
 
             if (tci.operator[](i)->tbk == tci.operator[](i)->tpk && i==0) { //INIT FIRST PEAK
             
@@ -773,9 +661,7 @@ public:
                 pivot->clear();
                 current = starting;
                
-
-            
-                
+    
             } //END FIRST
            
             if (anticipo && i >0 && i< tci.size()-1) { //SE ANTICIPO
@@ -786,17 +672,10 @@ public:
               
                 for (int j = 0; j < fd; j++) { 
 
-
-
                     pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j]* computeGain(fd, fd_square, j, true)
                                                   + buffer->getReadPointer(0)[tpk-fd-j]*computeGain(fd, fd_square, j, false);
 
-                  /*  if (pivot->getReadPointer(0)[j] == 0) {
-
-                    }*/
-
                     pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
-
                    
                 }
 
@@ -912,7 +791,6 @@ private:
 
             return asc ? 2 * (float)j / (float)fade - (float)(j * j) / square
                        : 1 - (float)(j * j) / square;
-            
     }
 
   
@@ -964,7 +842,7 @@ private:
     TextButton stopButton;
     TextButton quantizeButton;
     TextButton detectButton;
-    TooltipWindow tooltipWindow{ this }; // instance required for ToolTips to work
+    TooltipWindow tooltipWindow{ this };
 
     File opened;
     DrawableButton openImageButton;
