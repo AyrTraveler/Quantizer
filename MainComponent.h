@@ -228,7 +228,7 @@ public:
             float c = dtc.visibleRange.getStart();
             float d = dtc.visibleRange.getEnd();
 
-            if(a/b >= c && a/b <d && !tci.operator[](k)->bypassa)
+            if(a/b >= c && a/b <d)
             dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
         }
 
@@ -463,6 +463,11 @@ public:
 
     void detectPeaks(int BPM, int samplerate, float divider,float CustomThreshold, File file) {
         
+
+        ofstream myfile;
+        myfile.open("example2.txt");
+
+
         String fname = file.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
         
@@ -505,7 +510,7 @@ public:
         while (fabs(samples[k]) < 3 * threshold) k += 1;
         initSample = k;
         tci.add(new TimeContainerInfo(initSample, initSample));
-
+        myfile <<(String)initSample + " - "+ (String)initSample + "\n";
         int counter = initSample;
         float preMax = 100;
         float min = 10.0f;
@@ -539,6 +544,7 @@ public:
                         float mantissa = howManyQuantums - floor(howManyQuantums);
                         int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
                         tci.add(new TimeContainerInfo(counter + i, tbk + initSample));
+                        myfile << (String)(counter + i) + " - " + (String)(tbk + initSample)+ "\n";
                         break;
                     }
               }
@@ -547,29 +553,53 @@ public:
             preMax = maxL;
         }
 
+        
+        
+        /*FILTRO FALSI POSITIVI*/
         int numPeaks = tci.size();
 
-        for (int k = 0; k < numPeaks; k++) { tci.operator[](k)->bypassa = false;}
+        for (int k = 0; k < numPeaks; k++) { tci.operator[](k)->bypassa = false; }
 
 
         /*FILTRO FALSI POSITIVI*/
-        for (int k = 1; k < numPeaks-1; k++) {   // MAX LEVEL < THRESHOLD
+        for (int k = 1; k < numPeaks - 1; k++) {   // MAX LEVEL < THRESHOLD
 
             int difference = tci.operator[](k + 1)->tpk - tci.operator[](k)->tpk;
+            int difference_tb = tci.operator[](k + 1)->tbk - tci.operator[](k)->tbk;
             AudioSampleBuffer* bufferDel = new AudioBuffer<float>(2, difference);
-            reader->read(bufferDel, 0, bufferDel->getNumSamples(), tci.operator[](k)->tpk, true, true);
-            float a = bufferDel->getMagnitude(0, bufferDel->getNumSamples());
-            float b = bufferDel->getRMSLevel(0, 0, bufferDel->getNumSamples());
+            reader->read(bufferDel, 0, difference, tci.operator[](k)->tpk, true, true);
+            float a = bufferDel->getMagnitude(0, difference);
+            float b = bufferDel->getRMSLevel(0, 0, difference);
 
-            if (difference < realSampleQuantum) { tci.operator[](k)->bypassa = true; }
+            if (difference_tb == 0) { tci.operator[](k)->bypassa = true; }
 
-            else if (b < prevRMS) { tci.operator[](k)->bypassa = true;}
+            else if (difference < realSampleQuantum) { tci.operator[](k)->bypassa = true; }
 
-            else if (a < CustomThreshold) { tci.operator[](k)->bypassa = true;}
+            else if (b < prevRMS) { tci.operator[](k)->bypassa = true; prevRMS = b; }
+
+            else if (a < CustomThreshold) { tci.operator[](k)->bypassa = true; prevRMS = b;}
+
+            else { prevRMS = b; }
             
-            prevRMS = b;
         }
        
+        bool finito = false;
+         
+        while (!finito) {
+            numPeaks = tci.size();
+            finito = true;
+            for (int y = 0; y < tci.size() - 1; y++) {
+
+
+                if (tci.operator[](y)->bypassa) {
+                    finito = false;
+                    tci.remove(y,true);
+                    break;
+                }
+            }
+
+        }
+        
         quantizeButton.setEnabled(true);
 
     }
@@ -617,7 +647,7 @@ public:
             buffer->clear();
             pivot->clear();
             reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
-            int current = 0;
+            int current = 0, tot = reader->lengthInSamples;
         
 
             for (int i = 0; i < tci.size(); i++) {
@@ -637,107 +667,105 @@ public:
             int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
             int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
 
-            if (tci.operator[](i)->tbk == tci.operator[](i)->tpk && i==0) { //INIT FIRST PEAK
-            
-                starting = (tci.operator[](i + 1)->anticipo) ? tci.operator[](i + 1)->tpk : tci.operator[](i + 1)->tbk - tci.operator[](i + 1)->fade;
-               
-
-                if (writer != nullptr)
-                    writer->writeFromAudioSampleBuffer(*buffer, tci.operator[](i)->tpk, starting - tci.operator[](i)->tpk);
-             
-                    
-                for (int j = 0; j < fd; j++) {
-
-                    float gain = 1 - (float)(j*j)/fd_square;
-                    pivot->getWritePointer(0)[j] = gain* buffer->getReadPointer(0)[starting + j];
-
-                   
-                }
-
-                if (writer != nullptr)
-                // non dovrebbe essere *pivot, 0 ?
-                    writer->writeFromAudioSampleBuffer(*pivot, starting - fd, fd);
-                
-                pivot->clear();
-                current = starting;
-               
-    
-            } //END FIRST
-           
-            if (anticipo && i >0 && i< tci.size()-1) { //SE ANTICIPO
+            if (anticipo && i< tci.size()-1) { //SE ANTICIPO
                 
                 //DA 0 a delta + fd
                 pivot->copyFrom(0, 0, *buffer, 0, tpk-delta-fd, delta + fd);
                 pivot->copyFrom(1, 0, *buffer, 1, tpk-delta-fd, delta + fd);
-              
-                for (int j = 0; j < fd; j++) { 
+                
+                current += delta + fd;
 
+                for (int j = 0; j < fd; j++) { 
                     pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j]* computeGain(fd, fd_square, j, true)
                                                   + buffer->getReadPointer(0)[tpk-fd-j]*computeGain(fd, fd_square, j, false);
 
                     pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
-                   
                 }
+                Range<float> a = pivot->findMinMax(0, 0, delta + fd);
+                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - first\n";
+               
+                if(delta + fd>0)
+                writer->writeFromAudioSampleBuffer(*pivot, 0, delta + fd);
+                pivot->clear();
+                
 
                 //DA delta + fd a middle+delta
-                pivot->copyFrom(0, delta+fd ,*buffer,0,tpk,delta + middle);
-                pivot->copyFrom(1, delta+fd, *buffer, 1, tpk, delta + middle);
-                int temp = fd + middle+delta;
+                pivot->copyFrom(0, 0 ,*buffer,0,tpk,delta + middle);
+                pivot->copyFrom(1, 0, *buffer, 1, tpk, delta + middle);
+              
+                current += delta + middle;
                 
-                for (int j = 0; j < delta; j++) { //FADE CRESCENTE DA TPK -DELTA -FADE A TPK -DELTA
+                for (int j = 0; j < delta; j++) { 
                                                     
-                    pivot->getWritePointer(0)[temp + j] = pivot->getReadPointer(0)[temp + j]  * computeGain(delta, delta*delta, j, false)
+                    pivot->getWritePointer(0)[middle + j] = pivot->getReadPointer(0)[middle + j]  * computeGain(delta, delta*delta, j, false)
                                                         + buffer->getReadPointer(0)[tbk+middle + j] * computeGain(delta, delta * delta, j, true);
-                    pivot->getWritePointer(1)[temp + j] = pivot->getReadPointer(0)[temp + j];
+                    pivot->getWritePointer(1)[middle + j] = pivot->getReadPointer(0)[middle + j];
                 }
 
+                a = pivot->findMinMax(0, 0, delta + middle);
+                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - second\n";
+
+                writer->writeFromAudioSampleBuffer(*pivot, 0, delta + middle);
+                pivot->clear();
 
                 //DA middle+delta + a tpk+1-fade
-                temp = anticipo_1 ? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
-                pivot->copyFrom(0, delta + fd + middle + delta, *buffer, 0, tbk + middle + delta, temp);
-                pivot->copyFrom(1, delta + fd + middle + delta, *buffer, 1, tbk + middle + delta, temp);
+                int   temp = anticipo_1 ? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
+                pivot->copyFrom(0, 0, *buffer, 0, tbk + middle + delta, temp);
+                pivot->copyFrom(1, 0, *buffer, 1, tbk + middle + delta, temp);
 
-                temp = anticipo_1 ? tpk_1 - fd_1 - tpk + fd : tbk_1 - delta_1 - tpk + fd;
-                if (writer != nullptr)
+                current += temp;
+                a = pivot->findMinMax(0, 0, temp);
+                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - third\n";
+               
                 writer->writeFromAudioSampleBuffer(*pivot, 0, temp);
-                
                 pivot->clear();
 
            }
-            else if (!tci.operator[](i)->anticipo && i > 0 && i < tci.size() - 1)//SE POSTICIPO MA PRIMA DELL'ULTIMO PICCO
+            else if (!tci.operator[](i)->anticipo && i < tci.size() - 1)//SE POSTICIPO MA PRIMA DELL'ULTIMO PICCO
             {
-                myfile << "ciao2\n";
+               
                 //DA 0 a delta
                 pivot->copyFrom(0, 0, *buffer, 0, tbk, delta);
                 pivot->copyFrom(1, 0, *buffer, 1, tbk, delta);
+                current += delta ;
 
                 for (int j = 0; j < delta; j++) {
                     pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j] * computeGain(delta, delta*delta, j, true)
                         + buffer->getReadPointer(0)[tbk - delta + j] * computeGain(delta, delta*delta, j, false);
                     pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
                 }
+                Range<float> a = pivot->findMinMax(0, 0, delta + fd);
+                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - first\n";
+
+                writer->writeFromAudioSampleBuffer(*pivot, 0, delta);
+                pivot->clear();
 
                 //DA delta + fd a middle+delta
-                pivot->copyFrom(0, delta, *buffer, 0, tpk, middle+delta);
-                pivot->copyFrom(1, delta, *buffer, 1, tpk, middle+delta);
-                int temp = delta + middle;
+                pivot->copyFrom(0, 0, *buffer, 0, tpk, middle+delta);
+                pivot->copyFrom(1, 0, *buffer, 1, tpk, middle+delta);
+                current += middle + delta;
 
-                for (int j = 0; j < delta; j++) { //FADE CRESCENTE DA TPK -DELTA -FADE A TPK -DELTA
+                for (int j = 0; j < delta; j++) {
 
-                    pivot->getWritePointer(0)[temp + j] = pivot->getReadPointer(0)[temp + j] * computeGain(delta, delta * delta, j, false)
+                    pivot->getWritePointer(0)[middle + j] = pivot->getReadPointer(0)[middle + j] * computeGain(delta, delta * delta, j, false)
                                                         + buffer->getReadPointer(0)[tbk + middle + j] * computeGain(delta, delta * delta, j, true);
-                    pivot->getWritePointer(1)[temp + j] = pivot->getReadPointer(0)[temp + j];
+                    pivot->getWritePointer(1)[middle + j] = pivot->getReadPointer(0)[middle + j];
                 }
 
-                //---------------------------------------------
-                temp = anticipo_1? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
-                pivot->copyFrom(0, delta + middle + delta, *buffer, 0, tbk + middle + delta, temp);
-                pivot->copyFrom(1, delta + middle + delta, *buffer, 1, tbk + middle + delta, temp);
+                a = pivot->findMinMax(0, 0, delta + middle);
+                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - second\n";
 
-                temp = anticipo_1 ? tpk_1 - fd_1 - tbk + delta : tbk_1 - delta_1 - tbk + delta;
-                if (writer != nullptr)
-                    writer->writeFromAudioSampleBuffer(*pivot, 0, temp);
-
+                writer->writeFromAudioSampleBuffer(*pivot, 0, middle + delta);
+                pivot->clear();
+               
+                int temp = anticipo_1? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
+                pivot->copyFrom(0, 0, *buffer, 0, tbk + middle + delta, temp);
+                pivot->copyFrom(1, 0, *buffer, 1, tbk + middle + delta, temp);
+               
+                current += temp;
+                a = pivot->findMinMax(0, 0, temp);
+                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - third\n";
+                writer->writeFromAudioSampleBuffer(*pivot, 0, temp);
                 pivot->clear();
 
             }
