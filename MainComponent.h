@@ -871,7 +871,7 @@ private:
     TextButton detectButton;
     TooltipWindow tooltipWindow{ this };
 
-    File opened;
+  
     
     DrawableButton playImageButton;
     DrawableButton stopImageButton;
