@@ -28,7 +28,6 @@ public:
         thumbnailCache(5),
         dtc(formatManager, transportSource,s)
         , playImageButton("play",DrawableButton::ImageFitted)
-        , openImageButton("open", DrawableButton::ImageFitted)
         , stopImageButton("stop", DrawableButton::ImageFitted)
         , pauseImageButton("pause", DrawableButton::ImageFitted)
     {
@@ -873,7 +872,7 @@ private:
     TooltipWindow tooltipWindow{ this };
 
     File opened;
-    DrawableButton openImageButton;
+    
     DrawableButton playImageButton;
     DrawableButton stopImageButton;
     DrawableButton pauseImageButton;
