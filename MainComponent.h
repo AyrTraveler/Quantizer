@@ -985,7 +985,7 @@ private:
     AudioTransportSource transportSource;
     TransportState state;
     AudioThumbnailCache thumbnailCache;
-
+    int numTransient=0;
     DemoThumbnailComp dtc;
     String outPath = File::getCurrentWorkingDirectory().getFullPathName();
     float maxChannel=0;
