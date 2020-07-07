@@ -971,7 +971,8 @@ private:
        if(dtc.peakMarkers.size()>numTransient){
 				      numTransient= dtc.peakMarkers.size();
 				      tci.add(new TimeContainerInfo(dtc.peakMarkers.getLast()->getSample(), 
-				      getClosestBeat(int BPM, int samplerate, float divider,int i, int initSample)));
+				      getClosestBeat((BPMTE.getText()).getIntValue(),(samplerateTE.getText()).getIntValue(), 4,dtc.peakMarkers.getLast()->getSample(), initSample)));
+				       
 		   }
        
     }
@@ -1010,6 +1011,7 @@ private:
     TransportState state;
     AudioThumbnailCache thumbnailCache;
     int numTransient=0;
+    int initSample=0;
     DemoThumbnailComp dtc;
     String outPath = File::getCurrentWorkingDirectory().getFullPathName();
     float maxChannel=0;
