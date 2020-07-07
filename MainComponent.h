@@ -443,6 +443,24 @@ public:
             
     }
 
+	 int getClosestBeat(int BPM, int samplerate, float divider,int i, int initSample) {
+       
+                /*TIME INFO*/
+        float BPS = BPM / 60.0F;
+        float timeQuantum = 1.0f / BPS / (float)divider;  //quanto dura un sedicesimo in secondi
+        float sampleQuantum = (float)samplerate / BPS / (float)divider;  //quanti sample sono i 16esimi in base al samplerate
+        int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
+        
+        float howManyQuantums = (float)(i - initSample) / sampleQuantum;
+        float mantissa = howManyQuantums - floor(howManyQuantums);
+        int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
+                       
+      
+       return tbk;
+      
+
+    }
+
     float detectMax(File file) {
 
         String fname = file.getFileName();
@@ -952,7 +970,8 @@ private:
        //if(!isPeaking) specificMarkers();
        if(dtc.peakMarkers.size()>numTransient){
 				      numTransient= dtc.peakMarkers.size();
-				      tci.add(new TimeContainerInfo(dtc.peakMarkers.getLast()->getSample(), 0));
+				      tci.add(new TimeContainerInfo(dtc.peakMarkers.getLast()->getSample(), 
+				      getClosestBeat(int BPM, int samplerate, float divider,int i, int initSample)));
 		   }
        
     }
