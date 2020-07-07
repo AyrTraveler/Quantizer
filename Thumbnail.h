@@ -191,6 +191,9 @@ public:
             transportSource.setPosition(audioPosition);
             posY = event.position.y;
         }
+        
+        
+          paintSingleMarker(event.position.x);
     }
     
      void paintSingleMarker(float x) {
