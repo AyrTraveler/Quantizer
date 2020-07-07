@@ -21,6 +21,10 @@ class CustomRect : public DrawableRectangle
         sample = s;
     }
     
+    int getSample(){
+      return sample;
+    }
+    
     
   private:
     int sample;
