@@ -12,6 +12,13 @@
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "TimeContainerInfo.h"
 
+class CustomRect : public DrawableRectangle
+{
+    
+
+};
+
+
 class DemoThumbnailComp : public Component,
     public ChangeListener,
     public FileDragAndDropTarget,
