@@ -604,21 +604,112 @@ public:
     }
 
 
-    /*   QUANTIZE
-            
-            1. LEGGO FILE
-            2. APRO FILE IN SCRITTURA
-            3. CREO 2 BUFFER IN CUI COPIO IL READER CREATO AL PUNTO 1
 
-            4. FOREACH element in TCI (per ogni peak individuato al detectPeaks)
-                4.1 se k==0  -->scrivo
-                4.2 se k > 0
-                    4.2.1 se ANTICIPO -->scrivo
-                    4.2.2 se POSTICIPO-->scrivo
-            
-            5. CANCELLO I BUFFER creati al punto 3
+ void quantize2(int BPM, int divider, int samplerate, File fileName, String newFileName)
+    {
+        String fname = fileName.getFileName();
+        bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
+        if (!isWav) return;
+       
+        /*LEGGO FILE WAV*/
+        AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+        AudioFormat* audioFormat = formatManager.getDefaultFormat();
+        AudioFormatReader* reader = formatManager.createReaderFor(fileName);
+       
+        /*CREO FILE WAV IN SCRITTURA*/
+        WavAudioFormat format;
+        std::unique_ptr<AudioFormatWriter> writer;
+        writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
 
-    */
+
+  //        ofstream myfile;
+  //        myfile.open("example.txt");
+       
+            AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
+            AudioSampleBuffer* pivot = new AudioBuffer<float>(2, reader->lengthInSamples);
+            buffer->clear();
+            pivot->clear();
+            reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
+            int current = 0, tot = reader->lengthInSamples;
+        
+
+            for (int i = 0; i < tci.size(); i++) {
+           
+            bool anticipo = tci.operator[](i)->anticipo;
+            int tpk = tci.operator[](i)->tpk;
+            int tbk = tci.operator[](i)->tbk;
+            int fd = tci.operator[](i)->fade;
+            float fd_square = fd * fd;
+            int delta = tci.operator[](i)->delta_t;
+            int starting = tpk - fd - delta;
+         
+            bool anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->anticipo;
+            int tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tpk;
+            int tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tbk;
+            int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->fade:tci.operator[](i+1)->fade;
+            int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
+            int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
+            
+            if(anticipo && anticipo_1){
+                         
+                         for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk, tpk_1- delta - tpk);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0, tpk_1-delta-tpk);
+                         pivot->clear();
+                         
+                         for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk_1 - delta - delta_1, delta_1);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0,delta_1);
+                         pivot->clear();
+            
+            }
+            else if(anticipo && !anticipo_1){
+                
+                 for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk, tbk_1- delta - tpk);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0, tbk_1 - delta-tpk);
+                         pivot->clear();
+                         
+            }
+            else if(!anticipo && anticipo_1){
+                
+                    for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk, tpk_1 - tpk);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0, tpk_1 - tpk);
+                         pivot->clear();
+                         
+                         for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk_1 - delta - delta_1, delta_1 + delta);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0,delta_1 + delta);
+                         pivot->clear();
+                
+            
+            }
+            else if(!anticipo && !anticipo_1){
+            
+                for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tpk, tbk_1 - tpk);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0, tbk_1 - tpk);
+                         pivot->clear();
+                         
+                         for(int u =0; u< pivot->getNumChannels(); u++)
+                            pivot->copyFrom(u, 0, *buffer, u, tbk_1 - delta ,  delta);
+                             
+                         writer->writeFromAudioSampleBuffer(*pivot, 0, delta);
+                         pivot->clear();
+            
+            }
+            
+       }
+
+  }
 
     void quantize(int BPM, int divider, int samplerate, File fileName, String newFileName)
     {
