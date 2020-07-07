@@ -952,6 +952,7 @@ private:
        //if(!isPeaking) specificMarkers();
        if(dtc.peakMarkers.size()>numTransient){
 				      numTransient= dtc.peakMarkers.size();
+				      tci.add(new TimeContainerInfo(0, 0));
 		   }
        
     }
