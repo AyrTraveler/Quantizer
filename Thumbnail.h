@@ -14,8 +14,16 @@
 
 class CustomRect : public DrawableRectangle
 {
+    public:
     
-
+    void setSample (int s){
+    
+        sample = s;
+    }
+    
+    
+  private:
+    int sample;
 };
 
 
@@ -183,6 +191,21 @@ public:
             transportSource.setPosition(audioPosition);
             posY = event.position.y;
         }
+    }
+    
+     void paintSingleMarker(float x) {
+
+        
+        peakMarkers.add(new DrawableRectangle());
+        Colour c;
+        peakMarkers.getLast()->setFill(c.fromRGB(13, 57, 176));
+        addAndMakeVisible(*peakMarkers.getLast());
+
+        peakMarkers.getLast()->setRectangle(Rectangle<float>(x - 0.75f, 0,
+            1.0f, (float)(getHeight() - scrollbar.getHeight())));
+            
+            peakMarkers.getLast()->setSample(xToTime(x));
+
     }
 
     void mouseDrag(const MouseEvent& e) override
