@@ -949,7 +949,11 @@ private:
 
     void timerCallback() override
     {
-       if(!isPeaking) specificMarkers();
+       //if(!isPeaking) specificMarkers();
+       if(dtc.peakMarkers.size()>numTransient){
+				      numTransient= dtc.peakMarkers.size();
+		   }
+       
     }
     
 
