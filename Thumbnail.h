@@ -16,18 +16,18 @@ class CustomRect : public DrawableRectangle
 {
     public:
     
-    void setSample (int s){
+    void setSample (float s){
     
         sample = s;
     }
     
-    int getSample(){
+    float getSample(){
       return sample;
     }
     
     
   private:
-    int sample;
+    float sample;
 };
 
 
@@ -183,7 +183,7 @@ public:
 
     void mouseDown(const MouseEvent& event) override
     {
-
+        
         mouseDrag(event);
         auto duration = transportSource.getLengthInSeconds();
 
@@ -194,16 +194,17 @@ public:
 
             transportSource.setPosition(audioPosition);
             posY = event.position.y;
+            paintSingleMarker(clickPosition);
         }
+        isDown = true;
         
-        
-          paintSingleMarker(event.position.x);
+          
     }
     
      void paintSingleMarker(float x) {
 
         
-        peakMarkers.add(new DrawableRectangle());
+        peakMarkers.add(new CustomRect());
         Colour c;
         peakMarkers.getLast()->setFill(c.fromRGB(13, 57, 176));
         addAndMakeVisible(*peakMarkers.getLast());
@@ -211,7 +212,11 @@ public:
         peakMarkers.getLast()->setRectangle(Rectangle<float>(x - 0.75f, 0,
             1.0f, (float)(getHeight() - scrollbar.getHeight())));
             
-            peakMarkers.getLast()->setSample(xToTime(x));
+        auto duration = transportSource.getLengthInSeconds();
+        auto w = getWidth();
+        auto audioPosition = (x / w) * duration;
+
+            peakMarkers.getLast()->setSample(audioPosition);
 
     }
 
@@ -246,7 +251,7 @@ public:
     void paintMarkers(TimeContainerInfo* tci, int samplerate) {
 
         float pos = (float)tci->tpk / (float)samplerate;
-        peakMarkers.add(new DrawableRectangle());
+        peakMarkers.add(new CustomRect());
         Colour c;
         peakMarkers.getLast()->setFill(c.fromRGB(13, 57, 176));
         addAndMakeVisible(*peakMarkers.getLast());
@@ -266,11 +271,13 @@ public:
         currentLevel.setRectangle(Rectangle<float>(0, a, (float)getWidth(), 1.5f));
     }
 
-    OwnedArray<DrawableRectangle> peakMarkers;
+    OwnedArray<CustomRect> peakMarkers;
     Range<double> visibleRange;
     DrawableRectangle currentLevel;
     float posY;
     double position = 0;
+    bool isDown = false;
+    bool isCreated = true;
 private:
 
 

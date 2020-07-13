@@ -87,7 +87,9 @@ public:
         resolutionCbox.setSelectedItemIndex(2);
 
            s.setRange(0,1,0);
-           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue());  specificMarkers(); };
+           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); 
+           specificMarkers(); 
+           };
            s.setSkewFactor(2);
            s.setSliderStyle(Slider::LinearHorizontal);
            s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
@@ -110,7 +112,7 @@ public:
 
        
         quantizeButton.setButtonText("Quantize");
-        quantizeButton.onClick = [this] { quantize((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
+        quantizeButton.onClick = [this] { quantize2((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
         quantizeButton.setEnabled(false);
 
         
@@ -119,9 +121,8 @@ public:
             float q = remapValue(sGainLeft.getValue(), maxChannel);
             gainLabel.setText((String)q,dontSendNotification);
         isPeaking = true;
-        detectPeaks((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), 4,q,dtc.getLastDroppedFile().getLocalFile());  
-        
-        loopMarkers();
+       
+        //loopMarkers();
         isPeaking = false;
         };
 
@@ -202,19 +203,22 @@ public:
 
     void loopMarkers() {
 
-        int s = tci.size();
+        /*int s = tci.size();
         dtc.peakMarkers.clear();
         for (int k = 0; k < s;k++) {
             if(!tci.operator[](k)->bypassa)
             dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
-        }
+        }*/
 
     }
     void specificMarkers() {
 
+        ofstream myfile;
+        myfile.open("example3.txt");
         int s = tci.size();
         int p = dtc.peakMarkers.size();
-
+        myfile << (String)s + "\n";
+        myfile << (String)p + "\n";
         for (int j = 0; j <p; j++) {
             dtc.peakMarkers.operator[](j)->setVisible(false);
         }
@@ -227,8 +231,11 @@ public:
             float c = dtc.visibleRange.getStart();
             float d = dtc.visibleRange.getEnd();
 
-            if(a/b >= c && a/b <d)
-            dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
+            if (a / b >= c && a / b < d) {
+                myfile <<  "ciao\n";
+                dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
+            }
+           
         }
 
     }
@@ -410,12 +417,27 @@ public:
     void changeListenerCallback(ChangeBroadcaster* source) override
     {
          if (source == &dtc){
-              
+             isPeaking = true;
              String fname = dtc.getLastDroppedFile().getFileName();
              bool isWav = fname.contains(".wav")  || fname.contains(".Wav") || fname.contains(".WAV");
             
-             if(isWav) showAudioResource(URL(dtc.getLastDroppedFile()));
-          
+             if (isWav) {
+
+                 if(dtc.isCreated){
+                 initSample = detectPeaks((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), 4, dtc.getLastDroppedFile().getLocalFile());
+                 tci.add(new TimeContainerInfo(initSample,initSample));
+                 dtc.paintMarkers(tci.operator[](0), (samplerateTE.getText()).getIntValue());
+                 dtc.isCreated = false;
+                 }
+
+                 dtc.drawLevel(sGain.getValue(), maxChannel);
+                 playImageButton.setEnabled(true);
+                 stopImageButton.setEnabled(true);
+                 pauseImageButton.setEnabled(true);
+                 quantizeButton.setEnabled(true);
+                
+                 showAudioResource(URL(dtc.getLastDroppedFile()));
+             }
              gainText.setText("", dontSendNotification);
 
             if (!dtc.getLastDroppedFile().isEmpty() && isWav) {
@@ -427,19 +449,14 @@ public:
                     ,dontSendNotification);
 
                 maxChannel = detectMax(dtc.getLastDroppedFile().getLocalFile());
-                quantizeButton.setEnabled(false);
+                quantizeButton.setEnabled(true);
                               
             }
             
-            if(isWav){
-            dtc.drawLevel(sGain.getValue(), maxChannel);
-            playImageButton.setEnabled(true);
-            stopImageButton.setEnabled(true);
-            pauseImageButton.setEnabled(true);
-            }
+           
            }
 
-        
+         isPeaking = false;
             
     }
 
@@ -454,7 +471,8 @@ public:
         float howManyQuantums = (float)(i - initSample) / sampleQuantum;
         float mantissa = howManyQuantums - floor(howManyQuantums);
         int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
-                       
+        
+            
       
        return tbk;
       
@@ -478,32 +496,26 @@ public:
     }
 
 
-    void detectPeaks(int BPM, int samplerate, float divider,float CustomThreshold, File file) {
+    int detectPeaks(int BPM, int samplerate, float divider, File file) {
         
-
-        ofstream myfile;
-        myfile.open("example2.txt");
-
 
         String fname = file.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
         
-        if (!isWav) return;
+        if (!isWav) return 0;
        
         bool checkBPM = BPM > 35 && BPM < 210;
         bool checkSR = samplerate >= 44100 && samplerate < 200000;
         bool checkDiv = ((int)divider % 2 == 0 && divider <= 4)||divider==0.5f;
 
-        if (!checkBPM || !checkDiv || !checkSR || !(dtc.getLastDroppedFile().toString(false).length()>0)) return;
+        if (!checkBPM || !checkDiv || !checkSR || !(dtc.getLastDroppedFile().toString(false).length()>0)) return 0;
   
-        tci.clear(true);
-        
+       
         /*TIME INFO*/
         float BPS = BPM / 60.0F;
         float timeQuantum = 1.0f / BPS / (float)divider;  //quanto dura un sedicesimo in secondi
         float sampleQuantum = (float)samplerate / BPS / (float)divider;  //quanti sample sono i 16esimi in base al samplerate
         int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
-        const float bufferLength = 512.0f;
         const float threshold = 0.04f;
 
         /*LEGGO FILE WAV*/
@@ -511,113 +523,20 @@ public:
         formatManager.registerBasicFormats();
         AudioFormat* audioFormat = formatManager.getDefaultFormat();
         AudioFormatReader* reader = formatManager.createReaderFor(file);
-        int top = (int)(reader->lengthInSamples / bufferLength);
-
-        float minR, maxR, minL, maxL;
-
-        int initSample;
+       
+       
         int k = 0;
 
         /*TEST*/
         AudioSampleBuffer* bufferTemp = new AudioBuffer<float>(2, samplerate * 5);
-        reader->readMaxLevels(0, reader->lengthInSamples,minR, maxR, minL, maxL);
-        maxChannel = maxL;
+       
         reader->read(bufferTemp, 0, bufferTemp->getNumSamples(), 0, true, true);
         float const* samples = bufferTemp->getReadPointer(0);
-        while (fabs(samples[k]) < 3 * threshold) k += 1;
-        initSample = k;
-        tci.add(new TimeContainerInfo(initSample, initSample));
-        myfile <<(String)initSample + " - "+ (String)initSample + "\n";
-        int counter = initSample;
-        float preMax = 100;
-        float min = 10.0f;
-        float prevRMS = 0.0f;
-     
-        while (counter < reader->lengthInSamples) {
-
-            AudioSampleBuffer* bufferTemp2 = new AudioBuffer<float>(2, bufferLength);
-            reader->read(bufferTemp2, 0, bufferTemp2->getNumSamples(), counter, true, true);
-            maxL = bufferTemp2->getMagnitude(0, bufferTemp2->getNumSamples());
-            min = maxL < min ? maxL : min;
-            if ((preMax<threshold && maxL > threshold) || (maxL - preMax) > 0.1) { //INIZIO TRANSIENT
-
-            AudioSampleBuffer* bufferTemp3 = new AudioBuffer<float>(2, bufferLength);
-            reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter - bufferLength, true, true);
-            bufferTemp3->clear();
-
-            reader->read(bufferTemp3, 0, bufferTemp3->getNumSamples(), counter, true, true);
-            delete bufferTemp3;
-
-            float const* samples = bufferTemp2->getReadPointer(0);
-
-                for (int i = 0; i < bufferTemp2->getNumSamples(); ++i)
-                {
-
-                    if (fabs(samples[i]) == maxL) {
-
-                        int running = 0;
-                        while (running * realSampleQuantum < counter + i - initSample) {running += 1;}
-                        float howManyQuantums = (float)(counter + i - initSample) / sampleQuantum;
-                        float mantissa = howManyQuantums - floor(howManyQuantums);
-                        int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
-                        tci.add(new TimeContainerInfo(counter + i, tbk + initSample));
-                        myfile << (String)(counter + i) + " - " + (String)(tbk + initSample)+ "\n";
-                        break;
-                    }
-              }
-            }
-            counter += bufferLength;
-            preMax = maxL;
-        }
-
-        
-        
-        /*FILTRO FALSI POSITIVI*/
-        int numPeaks = tci.size();
-
-        for (int k = 0; k < numPeaks; k++) { tci.operator[](k)->bypassa = false; }
-
-
-        /*FILTRO FALSI POSITIVI*/
-        for (int k = 1; k < numPeaks - 1; k++) {   // MAX LEVEL < THRESHOLD
-
-            int difference = tci.operator[](k + 1)->tpk - tci.operator[](k)->tpk;
-            int difference_tb = tci.operator[](k + 1)->tbk - tci.operator[](k)->tbk;
-            AudioSampleBuffer* bufferDel = new AudioBuffer<float>(2, difference);
-            reader->read(bufferDel, 0, difference, tci.operator[](k)->tpk, true, true);
-            float a = bufferDel->getMagnitude(0, difference);
-            float b = bufferDel->getRMSLevel(0, 0, difference);
-
-            if (difference_tb == 0) { tci.operator[](k)->bypassa = true; }
-
-            else if (difference < realSampleQuantum) { tci.operator[](k)->bypassa = true; }
-
-            else if (b < prevRMS) { tci.operator[](k)->bypassa = true; prevRMS = b; }
-
-            else if (a < CustomThreshold) { tci.operator[](k)->bypassa = true; prevRMS = b;}
-
-            else { prevRMS = b; }
-            
-        }
+        while (fabs(samples[k]) <  threshold) k += 1;
        
-        bool finito = false;
-         
-        while (!finito) {
-            numPeaks = tci.size();
-            finito = true;
-            for (int y = 0; y < tci.size() - 1; y++) {
-
-
-                if (tci.operator[](y)->bypassa) {
-                    finito = false;
-                    tci.remove(y,true);
-                    break;
-                }
-            }
-
-        }
         
-        quantizeButton.setEnabled(true);
+        return k;
+       
 
     }
 
@@ -641,8 +560,7 @@ public:
         writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
 
 
-  //        ofstream myfile;
-  //        myfile.open("example.txt");
+
        
             AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
             AudioSampleBuffer* pivot = new AudioBuffer<float>(2, reader->lengthInSamples);
@@ -676,7 +594,7 @@ public:
                              
                          writer->writeFromAudioSampleBuffer(*pivot, 0, tpk_1-delta-tpk);
                          pivot->clear();
-                         
+                          
                          for(int u =0; u< pivot->getNumChannels(); u++)
                             pivot->copyFrom(u, 0, *buffer, u, tpk_1 - delta - delta_1, delta_1);
                              
@@ -724,170 +642,44 @@ public:
                          pivot->clear();
             
             }
-            
-       }
-
-  }
-
-    void quantize(int BPM, int divider, int samplerate, File fileName, String newFileName)
-    {
-        String fname = fileName.getFileName();
-        bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
-        if (!isWav) return;
-       
-        /*LEGGO FILE WAV*/
-        AudioFormatManager formatManager;
-        formatManager.registerBasicFormats();
-        AudioFormat* audioFormat = formatManager.getDefaultFormat();
-        AudioFormatReader* reader = formatManager.createReaderFor(fileName);
-       
-        /*CREO FILE WAV IN SCRITTURA*/
-        WavAudioFormat format;
-        std::unique_ptr<AudioFormatWriter> writer;
-        writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
-
-
-        ofstream myfile;
-        myfile.open("example.txt");
-       
-            AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
-            AudioSampleBuffer* pivot = new AudioBuffer<float>(2, reader->lengthInSamples);
-            buffer->clear();
-            pivot->clear();
-            reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
-            int current = 0, tot = reader->lengthInSamples;
-        
-
-            for (int i = 0; i < tci.size(); i++) {
-           
-            bool anticipo = tci.operator[](i)->anticipo;
-            int tpk = tci.operator[](i)->tpk;
-            int tbk = tci.operator[](i)->tbk;
-            int fd = tci.operator[](i)->fade;
-            float fd_square = fd * fd;
-            int delta = tci.operator[](i)->delta_t;
-            int starting = tpk - fd - delta;
-         
-            bool anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->anticipo;
-            int tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tpk;
-            int tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tbk;
-            int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->fade:tci.operator[](i+1)->fade;
-            int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
-            int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
-
-            if (anticipo && i< tci.size()-1) { //SE ANTICIPO
                 
-                //DA 0 a delta + fd
-                pivot->copyFrom(0, 0, *buffer, 0, tpk-delta-fd, delta + fd);
-                pivot->copyFrom(1, 0, *buffer, 1, tpk-delta-fd, delta + fd);
-                
-                current += delta + fd;
+            }
 
-                for (int j = 0; j < fd; j++) { 
-                    pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j]* computeGain(fd, fd_square, j, true)
-                                                  + buffer->getReadPointer(0)[tpk-fd-j]*computeGain(fd, fd_square, j, false);
+            /*LEGGO FILE WAV*/
+            AudioFormatManager formatManager2;
+            formatManager2.registerBasicFormats();
+            AudioFormat* audioFormat2 = formatManager2.getDefaultFormat();
+            AudioFormatReader* reader2 = formatManager2.createReaderFor(File(newFileName));
 
-                    pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
-                }
-                Range<float> a = pivot->findMinMax(0, 0, delta + fd);
-                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - first\n";
-               
-                if(delta + fd>0)
-                writer->writeFromAudioSampleBuffer(*pivot, 0, delta + fd);
-                pivot->clear();
-                
+            AudioSampleBuffer* buffer2 = new AudioBuffer<float>(2, reader2->lengthInSamples);
+            buffer2->clear();
+            reader2->read(buffer2, 0, buffer2->getNumSamples(), 0, true, true);
+            float const* samples = buffer2->getReadPointer(0);
+            int contatore = 0;
+            ofstream myfile;
+            myfile.open("example4.txt");
 
-                //DA delta + fd a middle+delta
-                pivot->copyFrom(0, 0 ,*buffer,0,tpk,delta + middle);
-                pivot->copyFrom(1, 0, *buffer, 1, tpk, delta + middle);
-              
-                current += delta + middle;
-                
-                for (int j = 0; j < delta; j++) { 
-                                                    
-                    pivot->getWritePointer(0)[middle + j] = pivot->getReadPointer(0)[middle + j]  * computeGain(delta, delta*delta, j, false)
-                                                        + buffer->getReadPointer(0)[tbk+middle + j] * computeGain(delta, delta * delta, j, true);
-                    pivot->getWritePointer(1)[middle + j] = pivot->getReadPointer(0)[middle + j];
+            while (contatore < buffer2->getNumSamples()) {
+
+                if (samples[contatore]==0 || fabs(samples[contatore]) > 1) {
+                    myfile << (String)(samples[contatore])+","+(String)contatore +","+ (String)(contatore/44100.0f)+"\n";
                 }
 
-                a = pivot->findMinMax(0, 0, delta + middle);
-                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - second\n";
-
-                writer->writeFromAudioSampleBuffer(*pivot, 0, delta + middle);
-                pivot->clear();
-
-                //DA middle+delta + a tpk+1-fade
-                int   temp = anticipo_1 ? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
-                pivot->copyFrom(0, 0, *buffer, 0, tbk + middle + delta, temp);
-                pivot->copyFrom(1, 0, *buffer, 1, tbk + middle + delta, temp);
-
-                current += temp;
-                a = pivot->findMinMax(0, 0, temp);
-                myfile << "Anticipo - " + (String)a.getStart() + " - " + (String)i + " - third\n";
-               
-                writer->writeFromAudioSampleBuffer(*pivot, 0, temp);
-                pivot->clear();
-
-           }
-            else if (!tci.operator[](i)->anticipo && i < tci.size() - 1)//SE POSTICIPO MA PRIMA DELL'ULTIMO PICCO
-            {
-               
-                //DA 0 a delta
-                pivot->copyFrom(0, 0, *buffer, 0, tbk, delta);
-                pivot->copyFrom(1, 0, *buffer, 1, tbk, delta);
-                current += delta ;
-
-                for (int j = 0; j < delta; j++) {
-                    pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j] * computeGain(delta, delta*delta, j, true)
-                        + buffer->getReadPointer(0)[tbk - delta + j] * computeGain(delta, delta*delta, j, false);
-                    pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
-                }
-                Range<float> a = pivot->findMinMax(0, 0, delta + fd);
-                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - first\n";
-
-                writer->writeFromAudioSampleBuffer(*pivot, 0, delta);
-                pivot->clear();
-
-                //DA delta + fd a middle+delta
-                pivot->copyFrom(0, 0, *buffer, 0, tpk, middle+delta);
-                pivot->copyFrom(1, 0, *buffer, 1, tpk, middle+delta);
-                current += middle + delta;
-
-                for (int j = 0; j < delta; j++) {
-
-                    pivot->getWritePointer(0)[middle + j] = pivot->getReadPointer(0)[middle + j] * computeGain(delta, delta * delta, j, false)
-                                                        + buffer->getReadPointer(0)[tbk + middle + j] * computeGain(delta, delta * delta, j, true);
-                    pivot->getWritePointer(1)[middle + j] = pivot->getReadPointer(0)[middle + j];
-                }
-
-                a = pivot->findMinMax(0, 0, delta + middle);
-                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - second\n";
-
-                writer->writeFromAudioSampleBuffer(*pivot, 0, middle + delta);
-                pivot->clear();
-               
-                int temp = anticipo_1? tpk_1 - fd_1 - tbk - middle - delta : tbk_1 - delta_1 - tbk - middle - delta;
-                pivot->copyFrom(0, 0, *buffer, 0, tbk + middle + delta, temp);
-                pivot->copyFrom(1, 0, *buffer, 1, tbk + middle + delta, temp);
-               
-                current += temp;
-                a = pivot->findMinMax(0, 0, temp);
-                myfile << "Delay - " + (String)a.getStart() + " - " + (String)i + " - third\n";
-                writer->writeFromAudioSampleBuffer(*pivot, 0, temp);
-                pivot->clear();
+                contatore += 1;
 
             }
-          
-      
-        }
+  }
 
-            myfile.close();
-            delete pivot;
-            delete buffer;
 
-    }
+  /*  for (int j = 0; j < fd; j++) {
+      pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j]* computeGain(fd, fd_square, j, true)
+                                    + buffer->getReadPointer(0)[tpk-fd-j]*computeGain(fd, fd_square, j, false);
 
-   
+      pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
+  }*/
+
+
+
 private:
     
 
@@ -967,14 +759,36 @@ private:
 
     void timerCallback() override
     {
-       //if(!isPeaking) specificMarkers();
-       if(dtc.peakMarkers.size()>numTransient){
-				      numTransient= dtc.peakMarkers.size();
-				      tci.add(new TimeContainerInfo(dtc.peakMarkers.getLast()->getSample(), 
-				      getClosestBeat((BPMTE.getText()).getIntValue(),(samplerateTE.getText()).getIntValue(), 4,dtc.peakMarkers.getLast()->getSample(), initSample)));
-				       
+
+       
+        //myfile << "cacca";
+           
+       if(dtc.isDown)
+          {
+
+           ofstream myfile;
+           myfile.open("example7.txt");
+           auto start = dtc.peakMarkers.getLast()->getSample() * (samplerateTE.getText()).getIntValue();
+           auto rate = (samplerateTE.getText()).getIntValue();
+           auto BPM = (BPMTE.getText()).getIntValue();
+
+				      tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, 4, start, initSample)));
+                      gainLabel.setText((String)dtc.peakMarkers.size() + " - " + (String)tci.size(), dontSendNotification);
+
+                      for(int g = 0; g<tci.size();g++)
+                      myfile << 
+                          (String)tci.operator[](g)->tbk + "," +
+                          (String)tci.operator[](g)->tpk + "," +
+                          (String)tci.operator[](g)->delta_t + "," +
+                          (String)tci.size() + 
+                          "\n"; 
+                     
+                      dtc.isDown = false;
+                    myfile.close();   
 		   }
        
+      
+      
     }
     
 
