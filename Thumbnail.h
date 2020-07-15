@@ -196,17 +196,20 @@ public:
             posY = event.position.y;
             paintSingleMarker(clickPosition);
         }
-        isDown = true;
+        
         
           
     }
     
      void paintSingleMarker(float x) {
 
+         if (x<latestCLick) return;
         
+         latestCLick = x;
+
         peakMarkers.add(new CustomRect());
-        Colour c;
-        peakMarkers.getLast()->setFill(c.fromRGB(13, 57, 176));
+       
+        peakMarkers.getLast()->setFill(Colours::deeppink);
         addAndMakeVisible(*peakMarkers.getLast());
 
         peakMarkers.getLast()->setRectangle(Rectangle<float>(x - 0.75f, 0,
@@ -216,8 +219,8 @@ public:
         auto w = getWidth();
         auto audioPosition = (x / w) * duration;
 
-            peakMarkers.getLast()->setSample(audioPosition);
-
+            peakMarkers.getLast()->setSample(xToTime(x));
+            isDown = true;
     }
 
     void mouseDrag(const MouseEvent& e) override
@@ -252,13 +255,25 @@ public:
 
         float pos = (float)tci->tpk / (float)samplerate;
         peakMarkers.add(new CustomRect());
-        Colour c;
-        peakMarkers.getLast()->setFill(c.fromRGB(13, 57, 176));
+        
+        peakMarkers.getLast()->setFill(Colours::deeppink);
         addAndMakeVisible(*peakMarkers.getLast());
 
         peakMarkers.getLast()->setRectangle(Rectangle<float>(timeToX(pos) - 0.75f, 0,
             1.0f, (float)(getHeight() - scrollbar.getHeight())));
 
+    }
+
+    void smartPaint(float audioPos, int pos) {
+
+        gridMarkers.add(new CustomRect());
+        gridMarkers.getLast()->setFill(juce::Colours::lightgreen);
+        gridMarkers.getLast()->setSample(audioPos);
+        addAndMakeVisible(*gridMarkers.getLast());
+        float w = (pos % 4 == 0) ? 1.0f: 0.4f;
+
+        gridMarkers.getLast()->setRectangle(Rectangle<float>(timeToX(audioPos) - 0.75f, 0,
+           w, (float)(getHeight() - scrollbar.getHeight())));
     }
 
     void drawLevel(float level, float maxChannel) {
@@ -272,19 +287,21 @@ public:
     }
 
     OwnedArray<CustomRect> peakMarkers;
+    OwnedArray<CustomRect> gridMarkers;
     Range<double> visibleRange;
     DrawableRectangle currentLevel;
     float posY;
     double position = 0;
     bool isDown = false;
     bool isCreated = true;
+    bool scrollMoved = false;
 private:
 
 
     AudioTransportSource& transportSource;
     Slider& zoomSlider;
     ScrollBar scrollbar{ false };
-
+    float latestCLick = 0.0f;
     AudioThumbnailCache thumbnailCache{ 5 };
     AudioThumbnail thumbnail;
 
@@ -315,6 +332,9 @@ private:
 
     void scrollBarMoved(ScrollBar* scrollBarThatHasMoved, double newRangeStart) override
     {
+
+        scrollMoved = true;
+
         if (scrollBarThatHasMoved == &scrollbar)
             if (!(isFollowingTransport && transportSource.isPlaying()))
                 setRange(visibleRange.movedToStartAt(newRangeStart));

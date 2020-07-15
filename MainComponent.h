@@ -12,7 +12,7 @@
 #include "TimeContainerInfo.h"
 #include "Thumbnail.h"
 #include "CustomLookAndFeel.h"
-
+//#include<ctime> 
 #include <iostream>
 #include <fstream>
 using namespace std;
@@ -32,7 +32,7 @@ public:
         , pauseImageButton("pause", DrawableButton::ImageFitted)
     {
 
-
+        
         startTimerHz(2);
         addAndMakeVisible(gainLabel);
         addAndMakeVisible(gainText);
@@ -85,10 +85,13 @@ public:
         resolutionCbox.addItem("1/8", 3);
         resolutionCbox.addItem("1/16", 4);
         resolutionCbox.setSelectedItemIndex(2);
+            
+           resolutionCbox.onChange = [this] {specificGrid(); };
+           BPMTE.onTextChange = [this] {specificGrid(); };
 
            s.setRange(0,1,0);
            s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); 
-           specificMarkers(); 
+           specificMarkers(); specificGrid();
            };
            s.setSkewFactor(2);
            s.setSliderStyle(Slider::LinearHorizontal);
@@ -118,12 +121,10 @@ public:
         
         detectButton.setButtonText("Peaks");
         detectButton.onClick = [this] {
-            float q = remapValue(sGainLeft.getValue(), maxChannel);
-            gainLabel.setText((String)q,dontSendNotification);
-        isPeaking = true;
-       
-        //loopMarkers();
-        isPeaking = false;
+           
+            
+
+
         };
 
         
@@ -181,7 +182,31 @@ public:
         transportSource.releaseResources();
     }
 
-  
+    float getResolutionIndex() {
+
+        int val = resolutionCbox.getSelectedId();
+
+        if(useTriplets.getToggleState()) return 3.0f;
+
+        switch (val) {
+
+            case 1:
+                return 0.5f;
+                break;
+            case 2:
+                return 1.0f;
+                break;
+            case 3:
+                return 2.0f;
+                break;
+            case 4:
+                return 4.0f;
+                break;
+
+        }
+
+        return 0.0f;
+    }
     
     String remap(float a, float b) {
 
@@ -240,7 +265,44 @@ public:
 
     }
 
-   
+    void specificGrid() {
+
+        int BPM = (BPMTE.getText()).getIntValue();
+        int samplerate = (samplerateTE.getText()).getIntValue();
+        float divider = getResolutionIndex();
+        float BPS = BPM / 60.0F;
+        float sampleQuantum = (float)samplerate / BPS / divider;  //quanti sample sono i 16esimi in base al samplerate
+        int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
+
+       
+        
+        dtc.gridMarkers.clear();
+        
+        juce::int64 start = dtc.visibleRange.getStart()* samplerate;
+        juce::int64 end = dtc.visibleRange.getEnd() * samplerate;
+
+        juce::int64 counter = initSample;
+        int cc = 0;
+
+        while (counter<audioLen) {
+            
+            if (counter>=start && counter <=end) {
+                dtc.smartPaint((float)counter/(float)samplerate, cc);
+                cc += 1;
+            }
+            else if (counter > end) {
+
+                break;
+            }
+
+            counter += realSampleQuantum;
+            
+            
+        }
+
+     
+
+    }
 
    
     void resized() override
@@ -256,7 +318,7 @@ public:
         beats.setText("BPM", dontSendNotification);
         triplets.setText("Triplets", dontSendNotification);
         bitdepth.setText("Bit depth", dontSendNotification);
-        gainLabel.setText("Threshold", dontSendNotification);
+        gainLabel.setText("Gain", dontSendNotification);
         outpath.setText("Output path", dontSendNotification);
     
         Font cfont = Font(myFont);
@@ -312,10 +374,10 @@ public:
         outpath.setBounds(leftLabelX,570,100, 30);
         outpath.setJustificationType(Justification::right);
         outputDirTE.setBounds(70, 600, 290, 35);
-        outputDirTE.setText(outPath + "\\",dontSendNotification);
+      //  outputDirTE.setText(outPath + "\\",dontSendNotification);
         samplerateTE.setText("44100",dontSendNotification);
         samplerateTE.setJustification(Justification::centred);
-        BPMTE.setText("118", dontSendNotification);
+        //BPMTE.setText("118", dontSendNotification);
         BPMTE.setJustification(Justification::centred);
       
         Colour c;
@@ -376,7 +438,7 @@ public:
         pauseImageButton.setBounds((getWidth() - 140) / 2 + 50, 445 - offsetY, 40, 40);
         stopImageButton.setBounds((getWidth() - 140) / 2 , 445 - offsetY, 40, 40);
 
-        if (!dtc.getLastDroppedFile().isEmpty()) { dtc.drawLevel(sGain.getValue(), maxChannel);}
+        if (!dtc.getLastDroppedFile().isEmpty()) { dtc.drawLevel(sGain.getValue(), maxChannel); specificGrid(); }
        
     }
 
@@ -424,7 +486,7 @@ public:
              if (isWav) {
 
                  if(dtc.isCreated){
-                 initSample = detectPeaks((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), 4, dtc.getLastDroppedFile().getLocalFile());
+                 initSample = detectPeaks((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
                  tci.add(new TimeContainerInfo(initSample,initSample));
                  dtc.paintMarkers(tci.operator[](0), (samplerateTE.getText()).getIntValue());
                  dtc.isCreated = false;
@@ -442,13 +504,14 @@ public:
 
             if (!dtc.getLastDroppedFile().isEmpty() && isWav) {
                 
-               
+                
                 outputDirTE.setText(File::getCurrentWorkingDirectory().getFullPathName() 
                     +"\\"+
                     dtc.getLastDroppedFile().getFileName().replace(".WAV", "_NEW.WAV",true).replace("%20", " ", true)
                     ,dontSendNotification);
 
                 maxChannel = detectMax(dtc.getLastDroppedFile().getLocalFile());
+                specificGrid();
                 quantizeButton.setEnabled(true);
                               
             }
@@ -462,20 +525,37 @@ public:
 
 	 int getClosestBeat(int BPM, int samplerate, float divider,int i, int initSample) {
        
-                /*TIME INFO*/
-        float BPS = BPM / 60.0F;
-        float timeQuantum = 1.0f / BPS / (float)divider;  //quanto dura un sedicesimo in secondi
-        float sampleQuantum = (float)samplerate / BPS / (float)divider;  //quanti sample sono i 16esimi in base al samplerate
-        int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
-        
-        float howManyQuantums = (float)(i - initSample) / sampleQuantum;
-        float mantissa = howManyQuantums - floor(howManyQuantums);
-        int tbk = realSampleQuantum * (mantissa > 0.5f ? ceil(howManyQuantums) : floor(howManyQuantums));
-        
-            
+          
+         float time = (float)i / (float)samplerate;
+         float prev = 0.0f;
+         int counter = 0;
+         int arrayLen = dtc.gridMarkers.size();
+         while (counter < arrayLen) {
+
+             float init = dtc.gridMarkers.operator[](counter)->getSample();
+
+             if (init<time) {
+
+                 prev = init;
+
+             }
+             else {
+
+                 if ((init - time) > (-prev + time)) {
+                     return floor(prev*samplerate);
+                 }
+                 else {
+                     return floor(init*samplerate);
+                 }
+
+             }
+
+             counter += 1;
+         }
+
+   
       
-       return tbk;
-      
+       return 0.0f;
 
     }
 
@@ -490,6 +570,7 @@ public:
         formatManager.registerBasicFormats();
         AudioFormatReader* reader = formatManager.createReaderFor(file);
         float minR, maxR, minL, maxL;
+        audioLen = reader->lengthInSamples;
         reader->readMaxLevels(0, reader->lengthInSamples, minR, maxR, minL, maxL);
         return maxL;
         
@@ -544,6 +625,9 @@ public:
 
  void quantize2(int BPM, int divider, int samplerate, File fileName, String newFileName)
     {
+
+    
+
         String fname = fileName.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
         if (!isWav) return;
@@ -772,8 +856,16 @@ private:
            auto rate = (samplerateTE.getText()).getIntValue();
            auto BPM = (BPMTE.getText()).getIntValue();
 
-				      tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, 4, start, initSample)));
-                      gainLabel.setText((String)dtc.peakMarkers.size() + " - " + (String)tci.size(), dontSendNotification);
+				      tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start, initSample)));
+
+                     /* time_t tt;
+                      struct tm* ti;
+                      time(&tt);
+                      ti = localtime(&tt);
+                      */
+
+
+                     // gainLabel.setText(asctime(ti), dontSendNotification);
 
                       for(int g = 0; g<tci.size();g++)
                       myfile << 
@@ -786,6 +878,8 @@ private:
                       dtc.isDown = false;
                     myfile.close();   
 		   }
+
+       if (dtc.scrollMoved) { dtc.scrollMoved = false; specificGrid(); }
        
       
       
@@ -826,6 +920,7 @@ private:
     AudioThumbnailCache thumbnailCache;
     int numTransient=0;
     int initSample=0;
+    juce::int64 audioLen = 0;
     DemoThumbnailComp dtc;
     String outPath = File::getCurrentWorkingDirectory().getFullPathName();
     float maxChannel=0;
