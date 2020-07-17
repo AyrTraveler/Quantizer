@@ -19,6 +19,28 @@ using namespace std;
 
 //------------------------------------------------------------------------------
 
+class DummyFLoat {
+
+public:
+
+    DummyFLoat(float val) {
+
+        value = val;
+    }
+
+    float getValue() {
+
+        return value;
+    }
+
+private:
+
+
+    float value;
+
+};
+
+
 class MainComponent : public AudioAppComponent,
     public ChangeListener, private Timer
 {
@@ -30,6 +52,7 @@ public:
         , playImageButton("play",DrawableButton::ImageFitted)
         , stopImageButton("stop", DrawableButton::ImageFitted)
         , pauseImageButton("pause", DrawableButton::ImageFitted)
+        , forwardFFT(fftOrder)
     {
 
         
@@ -399,32 +422,32 @@ public:
         Rectangle<int> sGainLeftBounds(20, 20, 20, 250 + 130 - offsetY);
         sGainLeft.setBounds(sGainLeftBounds);
 
-        ScopedPointer<Drawable> play_image(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
-        ScopedPointer<Drawable> play_over(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
-        ScopedPointer<Drawable> play_dis(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
+        std::unique_ptr<Drawable> play_image(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
+        std::unique_ptr<Drawable> play_over(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
+        std::unique_ptr<Drawable> play_dis(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
         play_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
         play_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
         play_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
 
-        ScopedPointer<Drawable> stop_image(Drawable::createFromImageData(BinaryData::stopbuttonblackroundedsquare_svg, BinaryData::stopbuttonblackroundedsquare_svgSize));
-        ScopedPointer<Drawable> stop_over(Drawable::createFromImageData(BinaryData::stopbuttonblackroundedsquare_svg, BinaryData::stopbuttonblackroundedsquare_svgSize));
-        ScopedPointer<Drawable> stop_dis(Drawable::createFromImageData(BinaryData::stopbuttonblackroundedsquare_svg, BinaryData::stopbuttonblackroundedsquare_svgSize));
+        std::unique_ptr<Drawable> stop_image(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
+        std::unique_ptr<Drawable> stop_over(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
+        std::unique_ptr<Drawable> stop_dis(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
 
         stop_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
         stop_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
         stop_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
         
-        ScopedPointer<Drawable> pause_image(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
-        ScopedPointer<Drawable> pause_over(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
-        ScopedPointer<Drawable> pause_dis(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
+        std::unique_ptr<Drawable> pause_image(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
+        std::unique_ptr<Drawable> pause_over(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
+        std::unique_ptr<Drawable> pause_dis(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
 
         pause_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
         pause_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
         pause_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
 
-        playImageButton.setImages(play_image, play_over, play_over, play_dis, play_over, play_over, play_over, play_dis);
-        stopImageButton.setImages(stop_image, stop_over, stop_over, stop_dis, stop_over, stop_over, stop_over, stop_dis);
-        pauseImageButton.setImages(pause_image, pause_over, pause_over, pause_dis, pause_over, pause_over, pause_over, pause_dis);
+        playImageButton.setImages(play_image.get(), play_over.get(), play_over.get(), play_dis.get(), play_over.get(), play_over.get(), play_over.get(), play_dis.get());
+        stopImageButton.setImages(stop_image.get(), stop_over.get(), stop_over.get(), stop_dis.get(), stop_over.get(), stop_over.get(), stop_over.get(), stop_dis.get());
+        pauseImageButton.setImages(pause_image.get(), pause_over.get(), pause_over.get(), pause_dis.get(), pause_over.get(), pause_over.get(), pause_over.get(), pause_dis.get());
         playImageButton.setRadioGroupId(123);
         stopImageButton.setRadioGroupId(123);
         pauseImageButton.setRadioGroupId(123);
@@ -763,6 +786,66 @@ public:
   }*/
 
 
+  void DetectOnsets(float sensitivity = 1.5f)
+  {
+     // onsetDetection = new OnsetDetection(PCMStream, 1024);
+      String newFileName = outputDirTE.getText();
+      AudioFormatManager formatManager;
+      formatManager.registerBasicFormats();
+      AudioFormat* audioFormat = formatManager.getDefaultFormat();
+      AudioFormatReader* reader = formatManager.createReaderFor(File(newFileName));
+
+      AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
+      buffer->clear();
+      reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
+      float const* samples = buffer->getReadPointer(0);
+
+      for (int y = 0; y < fftSize; y++) {
+
+          pivotSpectrum[y] = samples[y];
+
+      }
+
+      bool finished = false;
+      
+     
+      do
+      {
+          AddFlux(pivotSpectrum);
+          finished = true;  // onsetDetection.AddFlux(ReadMonoPCM());
+      } while (!finished);
+
+     
+    //  onsetDetection.FindOnsets(sensitivity);
+  }
+
+   void AddFlux(float * samples)
+  {
+       
+          forwardFFT.performFrequencyOnlyForwardTransform(samples);
+          memcpy(spectrum, previousSpectrum, sizeof(spectrum));
+          memcpy(samples, spectrum, sizeof(spectrum));
+
+          float temp = CompareSpectrums(spectrum, previousSpectrum, false);
+          fluxes.add(new DummyFLoat(temp));
+      
+  }
+
+   float CompareSpectrums(float* spectrum, float* previousSpectrum, bool rectify)
+   {
+      
+       float flux = 0;
+       for (int i = 0; i < sizeof(spectrum); i++)
+       {
+           float value = (spectrum[i] - previousSpectrum[i]);
+           if (!rectify || value > 0)
+           {
+               flux += value;
+           }
+       }
+
+       return flux;
+   }
 
 private:
     
@@ -926,6 +1009,16 @@ private:
     float maxChannel=0;
     float position = 0.0f;
     bool firstDropped = true;
+    enum
+    {
+        fftOrder = 10,
+        fftSize = 1 << fftOrder
+    };
+    float spectrum[fftSize];
+    float previousSpectrum[fftSize];
+    float pivotSpectrum[fftSize];
+    dsp::FFT forwardFFT;
+    OwnedArray<DummyFLoat> fluxes;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 
