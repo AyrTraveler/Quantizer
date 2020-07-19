@@ -33,6 +33,11 @@ public:
         return value;
     }
 
+    void setValue(float val) {
+
+        value = val;
+    }
+
 private:
 
 
@@ -57,6 +62,11 @@ public:
 
         
         startTimerHz(2);
+        addAndMakeVisible(peakSensitivity);
+        addAndMakeVisible(showGrid);
+        addAndMakeVisible(showGridToggle);
+        addAndMakeVisible(deleteTransient);
+        addAndMakeVisible(deleteTransientLabel);
         addAndMakeVisible(gainLabel);
         addAndMakeVisible(gainText);
         addAndMakeVisible(sGainLeft);
@@ -82,20 +92,26 @@ public:
         addAndMakeVisible(&pauseImageButton);
         addAndMakeVisible(sGain);
         
+        showGridToggle.setToggleState(true, dontSendNotification);
+        deleteTransient.onStateChange = [this] {dtc.deleteActive = deleteTransient.getToggleState(); };
+        showGridToggle.onStateChange = [this] {specificGrid(); };
+
+        
+
         Value sharedValue;
         sharedValue = Random::getSystemRandom().nextDouble() * 100;
         sGain.getValueObject().referTo(sharedValue);
         sGainLeft.getValueObject().referTo(sharedValue);
         
         sGain.onValueChange = [this] {
-            float q = remapValue(sGainLeft.getValue(), maxChannel);
+            
             dtc.drawLevel(sGain.getValue(), maxChannel);
            if(!dtc.getLastDroppedFile().isEmpty()) gainText.setText(remap(sGain.getValue(), maxChannel),dontSendNotification); 
         };
 
 
         sGainLeft.onValueChange = [this] {
-            float q = remapValue(sGainLeft.getValue(), maxChannel);
+            
             dtc.drawLevel(sGain.getValue(), maxChannel);
             if (!dtc.getLastDroppedFile().isEmpty()) gainText.setText(remap(sGain.getValue(), maxChannel), dontSendNotification); };
 
@@ -112,15 +128,19 @@ public:
            resolutionCbox.onChange = [this] {specificGrid(); };
            BPMTE.onTextChange = [this] {specificGrid(); };
 
-           s.setRange(0,1,0);
-           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); 
-           specificMarkers(); specificGrid();
-           };
+           peakSensitivity.setRange(1,32,1);
+           peakSensitivity.onDragEnd = [this] { detectOnsets(); };
+          
+           peakSensitivity.setSliderStyle(Slider::LinearHorizontal);
+           peakSensitivity.setTextBoxStyle(Slider::TextEntryBoxPosition::TextBoxRight, true, 90, 25);
+           peakSensitivity.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
+
+           s.setRange(0, 1, 0);
+           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); specificPeaks(); specificGrid(); };
            s.setSkewFactor(2);
            s.setSliderStyle(Slider::LinearHorizontal);
            s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-           s.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
-
+           s.setColour(Slider::thumbColourId, Colours::orange.withAlpha(0.5f));
              
               sGain.setRange(0, 1, 0);
               Colour barCol;
@@ -138,14 +158,14 @@ public:
 
        
         quantizeButton.setButtonText("Quantize");
-        quantizeButton.onClick = [this] { quantize2((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
+        quantizeButton.onClick = [this] { quantize((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
         quantizeButton.setEnabled(false);
 
         
-        detectButton.setButtonText("Peaks");
+        detectButton.setButtonText("Transients");
         detectButton.onClick = [this] {
            
-            
+            detectOnsets();
 
 
         };
@@ -159,6 +179,7 @@ public:
         stopImageButton.setEnabled(false);
         pauseImageButton.setEnabled(false);
 
+        
         setSize(600, 660);
 
         formatManager.registerBasicFormats();
@@ -249,46 +270,17 @@ public:
         
     }
 
-    void loopMarkers() {
-
-        /*int s = tci.size();
-        dtc.peakMarkers.clear();
-        for (int k = 0; k < s;k++) {
-            if(!tci.operator[](k)->bypassa)
-            dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
-        }*/
-
-    }
-    void specificMarkers() {
-
-        ofstream myfile;
-        myfile.open("example3.txt");
-        int s = tci.size();
-        int p = dtc.peakMarkers.size();
-        myfile << (String)s + "\n";
-        myfile << (String)p + "\n";
-        for (int j = 0; j <p; j++) {
-            dtc.peakMarkers.operator[](j)->setVisible(false);
-        }
-
-        dtc.peakMarkers.clear();
-        for (int k = 0; k < s; k++) {
-
-            float a = tci.operator[](k)->tpk;
-            float b = (samplerateTE.getText()).getIntValue();
-            float c = dtc.visibleRange.getStart();
-            float d = dtc.visibleRange.getEnd();
-
-            if (a / b >= c && a / b < d) {
-                myfile <<  "ciao\n";
-                dtc.paintMarkers(tci.operator[](k), (samplerateTE.getText()).getIntValue());
-            }
-           
-        }
-
-    }
-
+  
+   
     void specificGrid() {
+
+        if (!showGridToggle.getToggleState()) {
+
+            for (int i = 0; i < dtc.gridMarkers.size();i++) {
+                dtc.gridMarkers.operator[](i)->setVisible(false);
+            }
+            return;
+        }
 
         int BPM = (BPMTE.getText()).getIntValue();
         int samplerate = (samplerateTE.getText()).getIntValue();
@@ -310,7 +302,7 @@ public:
         while (counter<audioLen) {
             
             if (counter>=start && counter <=end) {
-                dtc.smartPaint((float)counter/(float)samplerate, cc);
+                dtc.smartPaint((float)counter/(float)samplerate, cc, false);
                 cc += 1;
             }
             else if (counter > end) {
@@ -327,10 +319,25 @@ public:
 
     }
 
+    void specificPeaks() {
+        dtc.peakMarkers.clear();
+        int size = peaks.size();
+        int samplerate = (samplerateTE.getText()).getIntValue();
+
+        for (int i = 0; i < size; i++) {
+
+            if (peaks.operator[](i)->getValue()>0) {
+                dtc.smartPaint((float)(i*1024) / (float)samplerate, 1, true);
+            }
+
+        }
+
+    }
+
    
     void resized() override
     {
- 
+        
         auto myFont = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
         LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypeface(myFont);
         Font newFont = Font(myFont);
@@ -343,7 +350,9 @@ public:
         bitdepth.setText("Bit depth", dontSendNotification);
         gainLabel.setText("Gain", dontSendNotification);
         outpath.setText("Output path", dontSendNotification);
-    
+        deleteTransientLabel.setText("Delete", dontSendNotification);
+        showGrid.setText("Show Grid", dontSendNotification);
+
         Font cfont = Font(myFont);
         cfont.setHeight(cfont.getHeight() * 0.8f);
     
@@ -354,6 +363,8 @@ public:
         bitdepth.setFont(cfont.withExtraKerningFactor(0.095f));
         gainLabel.setFont(cfont.withExtraKerningFactor(0.095f));
         outpath.setFont(cfont.withExtraKerningFactor(0.095f));
+        deleteTransientLabel.setFont(cfont.withExtraKerningFactor(0.095f));
+        showGrid.setFont(cfont.withExtraKerningFactor(0.095f));
 
         resolution.setFont(23);
         rate.setFont(23);
@@ -361,6 +372,8 @@ public:
         triplets.setFont(23);
         bitdepth.setFont(23);
         gainLabel.setFont(23);
+        deleteTransientLabel.setFont(23);
+        showGrid.setFont(23);
         outpath.setFont(23);
         gainText.setFont(23);
         outputDirTE.setFont(20);
@@ -376,7 +389,7 @@ public:
         
         resolution.setBounds(leftLabelX, labelY,100,30);
         resolution.setJustificationType(Justification::right);
-        resolutionCbox.setBounds(leftLabelX + 120, labelY, 80, 25);
+        resolutionCbox.setBounds(leftLabelX + 120, labelY, 80, 35);
         resolutionCbox.setJustificationType(Justification::centred);
         rate.setBounds(leftLabelX, labelY+ y_off, 100, 30);
         rate.setJustificationType(Justification::right);
@@ -387,20 +400,27 @@ public:
         triplets.setBounds(rightLabelX, labelY, 100, 30);
         triplets.setJustificationType(Justification::right);
         useTriplets.setBounds(rightLabelX +110, labelY, 25, 25);
+
+        deleteTransientLabel.setBounds(rightLabelX + 140, labelY + y_off, 100, 30);
+        deleteTransientLabel.setJustificationType(Justification::right);
+        deleteTransient.setBounds(rightLabelX + 250, labelY + y_off, 25, 25);
+
+        showGrid.setBounds(rightLabelX + 140, labelY, 100, 30);
+        showGrid.setJustificationType(Justification::right);
+        showGridToggle.setBounds(rightLabelX + 250, labelY, 25, 25);
+
+
         bitdepth.setBounds(rightLabelX, labelY+ y_off, 100, 30);
         bitdepth.setJustificationType(Justification::right);
         gainLabel.setBounds(rightLabelX, labelY + y_off * 2, 100, 30);
         gainLabel.setJustificationType(Justification::right);
         gainText.setBounds(rightLabelX + 110, labelY + 2 * y_off, 60, 25);
-        bitsCbox.setBounds(rightLabelX + 110, labelY + y_off, 60, 25);
+        bitsCbox.setBounds(rightLabelX + 110, labelY + y_off, 60, 35);
         bitsCbox.setJustificationType(Justification::centred);
         outpath.setBounds(leftLabelX,570,100, 30);
         outpath.setJustificationType(Justification::right);
-        outputDirTE.setBounds(70, 600, 290, 35);
-      //  outputDirTE.setText(outPath + "\\",dontSendNotification);
-        samplerateTE.setText("44100",dontSendNotification);
+        outputDirTE.setBounds(70, 600, getWidth()/2, 35);
         samplerateTE.setJustification(Justification::centred);
-        //BPMTE.setText("118", dontSendNotification);
         BPMTE.setJustification(Justification::centred);
       
         Colour c;
@@ -412,7 +432,11 @@ public:
         outpath.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
         gainLabel.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
         gainText.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.3f));
+        deleteTransientLabel.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
+        showGrid.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.2f));
 
+        Rectangle<int> peakBounds(60, 440 - offsetY, getWidth()/2 - 150, 30);
+        peakSensitivity.setBounds(peakBounds);
         Rectangle<int> sliderBounds(60, 410-offsetY, getWidth() - 120, 30);
         s.setBounds(sliderBounds);
         Rectangle<int> dtcBounds(60, 20, getWidth() - 120, 250+130 - offsetY);
@@ -461,8 +485,11 @@ public:
         pauseImageButton.setBounds((getWidth() - 140) / 2 + 50, 445 - offsetY, 40, 40);
         stopImageButton.setBounds((getWidth() - 140) / 2 , 445 - offsetY, 40, 40);
 
-        if (!dtc.getLastDroppedFile().isEmpty()) { dtc.drawLevel(sGain.getValue(), maxChannel); specificGrid(); }
+        if (!dtc.getLastDroppedFile().isEmpty()) {
+            dtc.drawLevel(sGain.getValue(), maxChannel); specificGrid(); specificPeaks();}
        
+        atStarting();
+
     }
 
 
@@ -477,7 +504,7 @@ public:
 
     bool loadURLIntoTransport(const URL& audioURL)
     {
-        // unload the previous file source and delete it..
+        
         transportSource.stop();
         transportSource.setSource(nullptr);
         currentAudioFileSource.reset();
@@ -489,9 +516,9 @@ public:
         {
             readerSource.reset(new AudioFormatReaderSource(reader, true));
             transportSource.setSource(readerSource.get(),
-                                       32768,                   // tells it to buffer this many samples ahead
-                                       &thread,                 // this is the background thread to use for reading-ahead
-                                       reader->sampleRate);     // allows for sample rate correction
+                                       32768,                   
+                                       &thread,                 
+                                       reader->sampleRate);     
             return true;
         }
 
@@ -501,17 +528,17 @@ public:
 
     void changeListenerCallback(ChangeBroadcaster* source) override
     {
+
+
          if (source == &dtc){
-             isPeaking = true;
+           
              String fname = dtc.getLastDroppedFile().getFileName();
              bool isWav = fname.contains(".wav")  || fname.contains(".Wav") || fname.contains(".WAV");
             
              if (isWav) {
 
                  if(dtc.isCreated){
-                 initSample = detectPeaks((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
-                 tci.add(new TimeContainerInfo(initSample,initSample));
-                 dtc.paintMarkers(tci.operator[](0), (samplerateTE.getText()).getIntValue());
+                 initSample = initPeak((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
                  dtc.isCreated = false;
                  }
 
@@ -523,8 +550,8 @@ public:
                 
                  showAudioResource(URL(dtc.getLastDroppedFile()));
              }
-             gainText.setText("", dontSendNotification);
-
+             
+            
             if (!dtc.getLastDroppedFile().isEmpty() && isWav) {
                 
                 
@@ -535,20 +562,25 @@ public:
 
                 maxChannel = detectMax(dtc.getLastDroppedFile().getLocalFile());
                 specificGrid();
+                specificPeaks();
                 quantizeButton.setEnabled(true);
                               
             }
             
-           
+            sGain.setValue(0);
            }
 
-         isPeaking = false;
+       
             
     }
 
-	 int getClosestBeat(int BPM, int samplerate, float divider,int i, int initSample) {
+	 int getClosestBeat(int BPM, int samplerate, float divider,int i, bool isPeak) {
        
-          
+     
+         float BPS = BPM / 60.0F;
+         float sensitivity = peakSensitivity.getValue();
+         float sampleQuantum = 1.0f / BPS / (float)divider/ sensitivity;
+        
          float time = (float)i / (float)samplerate;
          float prev = 0.0f;
          int counter = 0;
@@ -564,7 +596,11 @@ public:
              }
              else {
 
-                 if ((init - time) > (-prev + time)) {
+                 if ((init - time) > sampleQuantum && (-prev + time) > sampleQuantum) {
+                     return -1;
+                 }
+
+                 else if ((init - time) > (-prev + time)) {
                      return floor(prev*samplerate);
                  }
                  else {
@@ -600,7 +636,7 @@ public:
     }
 
 
-    int detectPeaks(int BPM, int samplerate, float divider, File file) {
+    int initPeak(int BPM, int samplerate, float divider, File file) {
         
 
         String fname = file.getFileName();
@@ -615,14 +651,13 @@ public:
         if (!checkBPM || !checkDiv || !checkSR || !(dtc.getLastDroppedFile().toString(false).length()>0)) return 0;
   
        
-        /*TIME INFO*/
+       
         float BPS = BPM / 60.0F;
-        float timeQuantum = 1.0f / BPS / (float)divider;  //quanto dura un sedicesimo in secondi
-        float sampleQuantum = (float)samplerate / BPS / (float)divider;  //quanti sample sono i 16esimi in base al samplerate
+        float timeQuantum = 1.0f / BPS / (float)divider; 
+        float sampleQuantum = (float)samplerate / BPS / (float)divider;  
         int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
         const float threshold = 0.04f;
 
-        /*LEGGO FILE WAV*/
         AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
         AudioFormat* audioFormat = formatManager.getDefaultFormat();
@@ -631,7 +666,7 @@ public:
        
         int k = 0;
 
-        /*TEST*/
+        
         AudioSampleBuffer* bufferTemp = new AudioBuffer<float>(2, samplerate * 5);
        
         reader->read(bufferTemp, 0, bufferTemp->getNumSamples(), 0, true, true);
@@ -646,22 +681,20 @@ public:
 
 
 
- void quantize2(int BPM, int divider, int samplerate, File fileName, String newFileName)
+ void quantize(int BPM, int divider, int samplerate, File fileName, String newFileName)
     {
-
-    
 
         String fname = fileName.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
         if (!isWav) return;
        
-        /*LEGGO FILE WAV*/
+       
         AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
         AudioFormat* audioFormat = formatManager.getDefaultFormat();
         AudioFormatReader* reader = formatManager.createReaderFor(fileName);
        
-        /*CREO FILE WAV IN SCRITTURA*/
+      
         WavAudioFormat format;
         std::unique_ptr<AudioFormatWriter> writer;
         writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
@@ -752,90 +785,78 @@ public:
                 
             }
 
-            /*LEGGO FILE WAV*/
-            AudioFormatManager formatManager2;
-            formatManager2.registerBasicFormats();
-            AudioFormat* audioFormat2 = formatManager2.getDefaultFormat();
-            AudioFormatReader* reader2 = formatManager2.createReaderFor(File(newFileName));
-
-            AudioSampleBuffer* buffer2 = new AudioBuffer<float>(2, reader2->lengthInSamples);
-            buffer2->clear();
-            reader2->read(buffer2, 0, buffer2->getNumSamples(), 0, true, true);
-            float const* samples = buffer2->getReadPointer(0);
-            int contatore = 0;
-            ofstream myfile;
-            myfile.open("example4.txt");
-
-            while (contatore < buffer2->getNumSamples()) {
-
-                if (samples[contatore]==0 || fabs(samples[contatore]) > 1) {
-                    myfile << (String)(samples[contatore])+","+(String)contatore +","+ (String)(contatore/44100.0f)+"\n";
-                }
-
-                contatore += 1;
-
-            }
+            
   }
 
 
-  /*  for (int j = 0; j < fd; j++) {
-      pivot->getWritePointer(0)[j] = pivot->getReadPointer(0)[j]* computeGain(fd, fd_square, j, true)
-                                    + buffer->getReadPointer(0)[tpk-fd-j]*computeGain(fd, fd_square, j, false);
 
-      pivot->getWritePointer(1)[j] = pivot->getReadPointer(0)[j];
-  }*/
-
-
-  void DetectOnsets(float sensitivity = 1.5f)
+  void detectOnsets(float sensitivity = 1.5f)
   {
-     // onsetDetection = new OnsetDetection(PCMStream, 1024);
-      String newFileName = outputDirTE.getText();
+     
+      fluxes.clear();
+      thresholdAverage.clear();
+      peaks.clear();
+
+      File newFileName = dtc.getLastDroppedFile().getLocalFile();
       AudioFormatManager formatManager;
       formatManager.registerBasicFormats();
       AudioFormat* audioFormat = formatManager.getDefaultFormat();
-      AudioFormatReader* reader = formatManager.createReaderFor(File(newFileName));
+      AudioFormatReader* reader = formatManager.createReaderFor(newFileName);
 
-      AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
+      AudioSampleBuffer* buffer = new AudioBuffer<float>(2, fftSize);
       buffer->clear();
-      reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
-      float const* samples = buffer->getReadPointer(0);
-
-      for (int y = 0; y < fftSize; y++) {
-
-          pivotSpectrum[y] = samples[y];
-
-      }
-
-      bool finished = false;
       
-     
-      do
+      zeromem(spectrum, 2048);
+      zeromem(previousSpectrum, 2048);
+      zeromem(pivotSpectrum, 2048);
+      
+      int counter = 0;
+      while (counter < reader->lengthInSamples)
       {
-          AddFlux(pivotSpectrum);
-          finished = true;  // onsetDetection.AddFlux(ReadMonoPCM());
-      } while (!finished);
+          buffer->clear();
+          reader->read(buffer, 0, buffer->getNumSamples(), counter, true, true);
+          
+          for (int k = 0; k < 1024; k++) {
+              pivotSpectrum[k] = buffer->getReadPointer(0)[k];
+          }
+    
+          
+                 
+          addFlux(pivotSpectrum);
+          zeromem(pivotSpectrum, 2048);
+          counter += fftSize;
+      } 
 
-     
-    //  onsetDetection.FindOnsets(sensitivity);
+      findTransients(sensitivity);
+
+      specificPeaks();
+
+      
   }
 
-   void AddFlux(float * samples)
+   void addFlux(float * samples)
   {
        
           forwardFFT.performFrequencyOnlyForwardTransform(samples);
-          memcpy(spectrum, previousSpectrum, sizeof(spectrum));
-          memcpy(samples, spectrum, sizeof(spectrum));
+          for (int k = 0; k < 1024; k++) {
+              previousSpectrum[k] = spectrum[k];
+          }
 
-          float temp = CompareSpectrums(spectrum, previousSpectrum, false);
+          for (int k = 0; k < 1024; k++) {
+              spectrum[k] = samples[k];
+          }
+   
+          zeromem(samples,sizeof(samples));
+          float temp = compareSpectrums(spectrum, previousSpectrum, true);
           fluxes.add(new DummyFLoat(temp));
       
   }
 
-   float CompareSpectrums(float* spectrum, float* previousSpectrum, bool rectify)
+   float compareSpectrums(float* spectrum, float* previousSpectrum, bool rectify)
    {
       
        float flux = 0;
-       for (int i = 0; i < sizeof(spectrum); i++)
+       for (int i = 0; i < fftSize; i++)
        {
            float value = (spectrum[i] - previousSpectrum[i]);
            if (!rectify || value > 0)
@@ -845,6 +866,163 @@ public:
        }
 
        return flux;
+   }
+
+
+   void findTransients(float sensitivity = 1.5f, float thresholdTimeSpan = 0.5f)
+   {
+       setThresholdAverage(fftSize, thresholdTimeSpan, sensitivity);
+       setPeaks(fftSize);
+       cleanPeaks();
+   }
+
+
+   void setThresholdAverage( int sampleWindow,
+       float thresholdTimeSpan, float thresholdMultiplier)
+   {
+      
+       float sourceTimeSpan = (float)(sampleWindow) / (float)(samplerateTE.getText()).getIntValue();
+       int windowSize = (int)(thresholdTimeSpan / sourceTimeSpan / 2);
+
+       for (int i = 0; i < fluxes.size(); i++)
+       {
+          
+           int start = std::max(i - windowSize, 0);
+           int end = std::min(fluxes.size(), i + windowSize);
+           
+           float mean = 0;
+
+           
+           for (int j = start; j < end; j++)
+           {
+               mean += fluxes.operator[](j)->getValue();
+           }
+
+         
+           mean /= (end - start);
+
+           
+           thresholdAverage.add(new DummyFLoat(mean * thresholdMultiplier));
+       }
+
+       
+   }
+
+  
+   void setPeaks( int sampleCount)
+   {
+       
+       const float indistinguishableRange = 0.01f; 
+       
+       int immunityPeriod = (int)((float)sampleCount
+           / (float)(samplerateTE.getText()).getIntValue()
+           / indistinguishableRange);
+
+      
+       
+       for (int i = 0; i < fluxes.size(); i++)
+       {
+           float a = fluxes.operator[](i)->getValue();
+           float b = thresholdAverage.operator[](i)->getValue();
+
+           if (a >= b)
+           {
+               peaks.add(new DummyFLoat(a-b));
+              
+           }
+           else
+           {
+               peaks.add(new DummyFLoat(0.0f));
+           }
+       }
+
+     
+       peaks.operator[](0)->setValue(0.0f);
+       for (int i = 1; i < peaks.size() - 1; i++)
+       {
+           
+           float a = peaks.operator[](i)->getValue();
+           float b = peaks.operator[](i+1)->getValue();
+           if (a < b)
+           {
+               peaks.operator[](i)->setValue(0.0f);
+               continue;
+           }
+
+           
+           if (peaks.operator[](i)->getValue() > 0.0f)
+           {
+               for (int j = i + 1; j < i + immunityPeriod; j++)
+               {
+                   if (peaks.operator[](j)->getValue() > 0)
+                   {
+                       peaks.operator[](j)->setValue(0.0f);
+                   }
+               }
+           }
+       }
+
+      
+   }
+
+
+   void cleanPeaks() {
+
+       File newFileName = dtc.getLastDroppedFile().getLocalFile();
+       AudioFormatManager formatManager;
+       formatManager.registerBasicFormats();
+       AudioFormat* audioFormat = formatManager.getDefaultFormat();
+       AudioFormatReader* reader = formatManager.createReaderFor(newFileName);
+
+       AudioSampleBuffer* buffer = new AudioBuffer<float>(2, fftSize);
+       buffer->clear();
+      
+       int size = peaks.size();
+
+       float threshold = remapValue(sGainLeft.getValue(), maxChannel);
+
+       for (int i = 2; i < size; i ++) {
+
+           float value = peaks.operator[](i)->getValue();
+
+           if (value > 0 ) {
+               reader->read(buffer, 0, buffer->getNumSamples(), (i-1)*fftSize, true, true);
+               float pre = buffer->getMagnitude(0, 0, buffer->getNumSamples());
+               reader->read(buffer, 0, buffer->getNumSamples(), i * fftSize, true, true);
+               float post = buffer->getMagnitude(0, 0, buffer->getNumSamples());
+
+               if(pre < threshold && post < threshold) peaks.operator[](i)->setValue(0.0f);
+
+           }
+
+       }
+
+       
+       auto rate = (samplerateTE.getText()).getIntValue();
+       auto BPM = (BPMTE.getText()).getIntValue();
+       tci.clear();
+       ofstream myfile;
+       myfile.open("example8.txt");
+
+       for (int i = 1; i < size; i++) {
+
+           float value = peaks.operator[](i)->getValue();
+
+           if (value > 0) {
+               
+               int closestBeat = getClosestBeat(BPM, rate, getResolutionIndex(), i * fftSize, true);
+            
+               if (closestBeat  < 0 ) peaks.operator[](i)->setValue(0.0f);
+               else {
+
+                   myfile << (String)(i * fftSize) +(String)closestBeat +  "\n";
+                   tci.add(new TimeContainerInfo(i*fftSize,closestBeat));
+               }
+           }
+
+       }
+       
+
    }
 
 private:
@@ -880,6 +1058,16 @@ private:
         Stopping
     };
 
+
+    void atStarting() {
+
+        if(firstTimeStarted){
+        BPMTE.setText("120", dontSendNotification);
+        samplerateTE.setText("44100", dontSendNotification);
+        gainText.setText("-", dontSendNotification);
+        firstTimeStarted = false;
+        }
+    }
    
 
     float computeGain(int fade, float square, int j, bool asc) {
@@ -928,41 +1116,29 @@ private:
     {
 
        
-        //myfile << "cacca";
+       
            
        if(dtc.isDown)
           {
 
-           ofstream myfile;
-           myfile.open("example7.txt");
-           auto start = dtc.peakMarkers.getLast()->getSample() * (samplerateTE.getText()).getIntValue();
-           auto rate = (samplerateTE.getText()).getIntValue();
-           auto BPM = (BPMTE.getText()).getIntValue();
+            if(!deleteTransient.getToggleState()){
+            auto start = dtc.peakMarkers.getLast()->getSample() * (samplerateTE.getText()).getIntValue();
+            auto rate = (samplerateTE.getText()).getIntValue();
+            auto BPM = (BPMTE.getText()).getIntValue();
+            tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
+            }
+            else {
+                
+                peaks.remove(dtc.transientToDelete, true);
+                tci.remove(dtc.transientToDelete, true);
 
-				      tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start, initSample)));
-
-                     /* time_t tt;
-                      struct tm* ti;
-                      time(&tt);
-                      ti = localtime(&tt);
-                      */
-
-
-                     // gainLabel.setText(asctime(ti), dontSendNotification);
-
-                      for(int g = 0; g<tci.size();g++)
-                      myfile << 
-                          (String)tci.operator[](g)->tbk + "," +
-                          (String)tci.operator[](g)->tpk + "," +
-                          (String)tci.operator[](g)->delta_t + "," +
-                          (String)tci.size() + 
-                          "\n"; 
-                     
-                      dtc.isDown = false;
-                    myfile.close();   
+            }
+           
+           dtc.isDown = false;
+                      
 		   }
 
-       if (dtc.scrollMoved) { dtc.scrollMoved = false; specificGrid(); }
+       if (dtc.scrollMoved) { dtc.scrollMoved = false; specificGrid(); specificPeaks(); }
        
       
       
@@ -978,20 +1154,19 @@ private:
     TextButton detectButton;
     TooltipWindow tooltipWindow{ this };
 
-  
-    
     DrawableButton playImageButton;
     DrawableButton stopImageButton;
     DrawableButton pauseImageButton;
 
-    Slider s,sGain,sGainLeft;
+    Slider s,sGain,sGainLeft, peakSensitivity;
     ComboBox resolutionCbox {"combo"};
     ComboBox bitsCbox{ "bits" };
     ToggleButton sixteenBits,twentyfourBits;
-    Label resolution, rate, beats, triplets, bitdepth, outpath, gainLabel, gainText;
-    ToggleButton useTriplets;
+    Label showGrid,resolution, rate, beats, triplets, bitdepth, outpath, gainLabel, gainText, deleteTransientLabel;
+    ToggleButton useTriplets, deleteTransient, showGridToggle;
+
     TextEditor samplerateTE, BPMTE, outputDirTE;
-    bool isPeaking = false;
+   
    
     TimeSliceThread thread{ "audio file preview" };
     URL currentAudioFile;
@@ -1009,16 +1184,22 @@ private:
     float maxChannel=0;
     float position = 0.0f;
     bool firstDropped = true;
+    bool firstTimeStarted = true;
     enum
     {
         fftOrder = 10,
         fftSize = 1 << fftOrder
     };
-    float spectrum[fftSize];
-    float previousSpectrum[fftSize];
-    float pivotSpectrum[fftSize];
+    float spectrum[2*fftSize];
+    float previousSpectrum[2*fftSize];
+    float pivotSpectrum[2*fftSize];
+
     dsp::FFT forwardFFT;
     OwnedArray<DummyFLoat> fluxes;
+    OwnedArray<DummyFLoat> thresholdAverage;
+    OwnedArray<DummyFLoat> peaks;
+
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 

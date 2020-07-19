@@ -194,7 +194,11 @@ public:
 
             transportSource.setPosition(audioPosition);
             posY = event.position.y;
-            paintSingleMarker(clickPosition);
+
+            if (!deleteActive)
+                paintSingleMarker(clickPosition);
+            else
+                deleteSingleMarker(clickPosition);
         }
         
         
@@ -222,6 +226,30 @@ public:
             peakMarkers.getLast()->setSample(xToTime(x));
             isDown = true;
     }
+
+     void deleteSingleMarker(float x) {
+
+         float deleteTime = xToTime(x);
+         float difference = 1000000.0f;
+         int toDelete = -1;
+         for (int i = 0; i < peakMarkers.size(); i ++) {
+
+             float i_time = peakMarkers.operator[](i)->getSample();
+
+             if (fabs(i_time - deleteTime) < difference) {
+
+              
+                 difference = fabs(i_time - deleteTime);
+                 toDelete = i;
+             }
+         }
+
+
+         peakMarkers.operator[](toDelete)->setVisible(false);
+         peakMarkers.remove(toDelete,true);
+         transientToDelete = toDelete;
+         isDown = true;
+     }
 
     void mouseDrag(const MouseEvent& e) override
     {
@@ -264,15 +292,26 @@ public:
 
     }
 
-    void smartPaint(float audioPos, int pos) {
+    void smartPaint(float audioPos, int pos, bool isPeak) {
+        
+        
+        if (isPeak) {
+            peakMarkers.add(new CustomRect());
+            peakMarkers.getLast()->setFill(juce::Colours::deeppink);
+        }
+            
+        else {
+            gridMarkers.add(new CustomRect());
+            gridMarkers.getLast()->setFill(juce::Colours::lightgreen);
+        }
+           
+        CustomRect* last = isPeak ? peakMarkers.getLast() : gridMarkers.getLast();
 
-        gridMarkers.add(new CustomRect());
-        gridMarkers.getLast()->setFill(juce::Colours::lightgreen);
-        gridMarkers.getLast()->setSample(audioPos);
-        addAndMakeVisible(*gridMarkers.getLast());
+        last->setSample(audioPos);
+        addAndMakeVisible(*last);
         float w = (pos % 4 == 0) ? 1.0f: 0.4f;
 
-        gridMarkers.getLast()->setRectangle(Rectangle<float>(timeToX(audioPos) - 0.75f, 0,
+        last->setRectangle(Rectangle<float>(timeToX(audioPos) - 0.75f, 0,
            w, (float)(getHeight() - scrollbar.getHeight())));
     }
 
@@ -292,9 +331,12 @@ public:
     DrawableRectangle currentLevel;
     float posY;
     double position = 0;
+    int transientToDelete = -1;
     bool isDown = false;
+    bool deleteActive = false;
     bool isCreated = true;
     bool scrollMoved = false;
+    bool showGrid= true;
 private:
 
 

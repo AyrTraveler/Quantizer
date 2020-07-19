@@ -28,6 +28,7 @@ public:
         // This method is where you should put your application's initialisation code..
 
         mainWindow.reset (new MainWindow (getApplicationName()));
+
     }
 
     void shutdown() override
@@ -72,6 +73,7 @@ public:
             setFullScreen (true);
            #else
             setResizable (true, true);
+            setFullScreen(true);
             centreWithSize (getWidth(), getHeight());
            #endif
 
@@ -85,6 +87,9 @@ public:
             // whatever you need.
             JUCEApplication::getInstance()->systemRequestedQuit();
         }
+
+
+        
 
         /* Note: Be careful if you override any DocumentWindow methods - the base
            class uses a lot of them, so by overriding you might break its functionality.
