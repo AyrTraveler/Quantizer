@@ -650,12 +650,7 @@ public:
 
         if (!checkBPM || !checkDiv || !checkSR || !(dtc.getLastDroppedFile().toString(false).length()>0)) return 0;
   
-       
-       
-        float BPS = BPM / 60.0F;
-        float timeQuantum = 1.0f / BPS / (float)divider; 
-        float sampleQuantum = (float)samplerate / BPS / (float)divider;  
-        int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
+        
         const float threshold = 0.04f;
 
         AudioFormatManager formatManager;
