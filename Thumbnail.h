@@ -205,6 +205,14 @@ public:
           
     }
     
+    void smartClear() {
+    
+      for(int i = 0; i< peakMarkers.size()){
+          peakMarkers.operator[](i)->setVisible(false);
+      }
+      peakMarkers.clear();
+    }
+    
      void paintSingleMarker(float x) {
 
          if (x<latestCLick) return;
