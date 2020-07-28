@@ -320,7 +320,7 @@ public:
     }
 
     void specificPeaks() {
-        dtc.peakMarkers.clear();
+        dtc.peakMarkers.smartClear();
         int size = peaks.size();
         int samplerate = (samplerateTE.getText()).getIntValue();
 
