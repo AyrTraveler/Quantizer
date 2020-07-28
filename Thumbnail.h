@@ -207,7 +207,7 @@ public:
     
     void smartClear() {
     
-      for(int i = 0; i< peakMarkers.size()){
+        for (int i = 0; i < peakMarkers.size(); i++) {
           peakMarkers.operator[](i)->setVisible(false);
       }
       peakMarkers.clear();

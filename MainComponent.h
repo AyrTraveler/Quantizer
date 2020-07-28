@@ -129,7 +129,10 @@ public:
            BPMTE.onTextChange = [this] {specificGrid(); };
 
            peakSensitivity.setRange(1,32,1);
-           peakSensitivity.onDragEnd = [this] { detectOnsets(); };
+           peakSensitivity.onDragEnd = [this] { detectOnsets(); 
+           
+             gainLabel.setText((String)tci.size(),dontSendNotification);
+           };
           
            peakSensitivity.setSliderStyle(Slider::LinearHorizontal);
            peakSensitivity.setTextBoxStyle(Slider::TextEntryBoxPosition::TextBoxRight, true, 90, 25);
@@ -166,6 +169,7 @@ public:
         detectButton.onClick = [this] {
            
             detectOnsets();
+            gainLabel.setText((String)tci.size(), dontSendNotification);
 
 
         };
@@ -320,7 +324,7 @@ public:
     }
 
     void specificPeaks() {
-        dtc.peakMarkers.smartClear();
+        dtc.smartClear();
         int size = peaks.size();
         int samplerate = (samplerateTE.getText()).getIntValue();
 
@@ -1132,6 +1136,7 @@ private:
                 
                 peaks.remove(dtc.transientToDelete, true);
                 tci.remove(dtc.transientToDelete, true);
+                gainLabel.setText((String)tci.size(), dontSendNotification);
 
             }
            
