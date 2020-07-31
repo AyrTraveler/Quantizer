@@ -7,11 +7,11 @@
 
   ==============================================================================
 */
-
+ 
 #pragma once
-#include "../JuceLibraryCode/JuceHeader.h"
+#include <JuceHeader.h>
 using namespace std;
-
+using namespace juce;
 class TimeContainerInfo {
 
 

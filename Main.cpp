@@ -8,8 +8,10 @@
   ==============================================================================
 */
 
-#include "../JuceLibraryCode/JuceHeader.h"
+#include <JuceHeader.h>
 #include "MainComponent.h"
+
+using namespace juce;
 
 //==============================================================================
 class QuantizerApplication  : public JUCEApplication

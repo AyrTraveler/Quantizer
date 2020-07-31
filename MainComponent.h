@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../JuceLibraryCode/JuceHeader.h"
+#include <JuceHeader.h>
 #include "TimeContainerInfo.h"
 #include "Thumbnail.h"
 #include "CustomLookAndFeel.h"
@@ -16,7 +16,7 @@
 #include <iostream>
 #include <fstream>
 using namespace std;
-
+using namespace juce;
 //------------------------------------------------------------------------------
 
 class DummyFLoat {
@@ -38,10 +38,27 @@ public:
         value = val;
     }
 
+    DummyFLoat(float val, int pos) {
+
+        value = val;
+        position = pos;
+    }
+
+    float getPosition() {
+
+        return position;
+    }
+
+    void setPosition(int pos) {
+
+        position = pos;
+    }
+
 private:
 
 
     float value;
+    int position = 0;
 
 };
 
@@ -168,7 +185,7 @@ public:
         detectButton.setButtonText("Transients");
         detectButton.onClick = [this] {
            
-            detectOnsets();
+          //  detectOnsets();
             gainLabel.setText((String)tci.size(), dontSendNotification);
 
 
@@ -324,14 +341,19 @@ public:
     }
 
     void specificPeaks() {
+        gainLabel.setText((String)peaks.size(), dontSendNotification);
         dtc.smartClear();
         int size = peaks.size();
         int samplerate = (samplerateTE.getText()).getIntValue();
 
         for (int i = 0; i < size; i++) {
+            
+            
 
             if (peaks.operator[](i)->getValue()>0) {
-                dtc.smartPaint((float)(i*1024) / (float)samplerate, 1, true);
+
+                int position = peaks.operator[](i)->getPosition();
+                dtc.smartPaint((float)(position*1024) / (float)samplerate, 1, true);
             }
 
         }
@@ -926,7 +948,7 @@ public:
 
            if (a >= b)
            {
-               peaks.add(new DummyFLoat(a-b));
+               peaks.add(new DummyFLoat(a-b,i));
               
            }
            else
@@ -1019,6 +1041,19 @@ public:
                }
            }
 
+       }
+
+       bool finito = false;
+
+       while(!finito){
+
+           finito = true;
+       for (int i = 1; i < peaks.size(); i++) {
+           
+           float value = peaks.operator[](i)->getValue();
+
+           if (value == 0.0f) { peaks.remove(i, true); finito = false; break; }
+       }
        }
        
 

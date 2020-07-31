@@ -9,9 +9,9 @@
 */
 
 #pragma once
-#include "../JuceLibraryCode/JuceHeader.h"
+#include <JuceHeader.h>
 #include "TimeContainerInfo.h"
-
+using namespace juce;
 class CustomRect : public DrawableRectangle
 {
     public:

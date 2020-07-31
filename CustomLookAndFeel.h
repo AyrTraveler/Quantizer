@@ -9,8 +9,8 @@
 */
 
 #pragma once
-#include "../JuceLibraryCode/JuceHeader.h"
-
+#include <JuceHeader.h>
+using namespace juce;
 struct CustomLookAndFeel : public LookAndFeel_V4
 {
 
@@ -96,7 +96,7 @@ struct CustomLookAndFeel : public LookAndFeel_V4
 
     }
 
-    void drawTextEditorOutline(Graphics& g, int width, int height, TextEditor& textEditor)
+   /* void drawTextEditorOutline(Graphics& g, int width, int height, TextEditor& textEditor)
     {
         if (dynamic_cast<AlertWindow*> (textEditor.getParentComponent()) == nullptr)
         {
@@ -114,7 +114,7 @@ struct CustomLookAndFeel : public LookAndFeel_V4
                 }
             }
         }
-    }
+    }*/
 
 };
 
