@@ -44,6 +44,13 @@ public:
         position = pos;
     }
 
+    DummyFLoat(float val, int pos, bool user) {
+
+        value = val;
+        position = pos;
+        isUserTransient = user;
+    }
+
     float getPosition() {
 
         return position;
@@ -54,12 +61,17 @@ public:
         position = pos;
     }
 
+    bool getUserTransient() {
+
+        return isUserTransient;
+    }
+
 private:
 
 
     float value;
     int position = 0;
-
+    bool isUserTransient = false;
 };
 
 
@@ -323,7 +335,7 @@ public:
         while (counter<audioLen) {
             
             if (counter>=start && counter <=end) {
-                dtc.smartPaint((float)counter/(float)samplerate, cc, false);
+                dtc.smartPaint((float)counter/(float)samplerate, cc, false, false);
                 cc += 1;
             }
             else if (counter > end) {
@@ -353,7 +365,9 @@ public:
             if (peaks.operator[](i)->getValue()>0) {
 
                 int position = peaks.operator[](i)->getPosition();
-                dtc.smartPaint((float)(position*1024) / (float)samplerate, 1, true);
+                bool isUserTransient = peaks.operator[](i)->getUserTransient();
+
+                dtc.smartPaint((float)(position*fftSize) / (float)samplerate, 1, true, isUserTransient);
             }
 
         }
@@ -868,8 +882,8 @@ public:
           }
    
           zeromem(samples,sizeof(samples));
-          float temp = compareSpectrums(spectrum, previousSpectrum, true);
-          fluxes.add(new DummyFLoat(temp));
+          float newFlux = compareSpectrums(spectrum, previousSpectrum, true);
+          fluxes.add(new DummyFLoat(newFlux));
       
   }
 
@@ -1001,7 +1015,7 @@ public:
        int size = peaks.size();
 
        float threshold = remapValue(sGainLeft.getValue(), maxChannel);
-
+       /*ELIMINO I TRANSIENT SOTTO LA THRESHOLD SETTATA DA UTENTE*/
        for (int i = 2; i < size; i ++) {
 
            float value = peaks.operator[](i)->getValue();
@@ -1022,9 +1036,10 @@ public:
        auto rate = (samplerateTE.getText()).getIntValue();
        auto BPM = (BPMTE.getText()).getIntValue();
        tci.clear();
+       UserTci.clear();
        ofstream myfile;
        myfile.open("example8.txt");
-
+       /*tolgo transient troppo vicini e aggiungo peaks all'array di pointer*/
        for (int i = 1; i < size; i++) {
 
            float value = peaks.operator[](i)->getValue();
@@ -1043,27 +1058,23 @@ public:
 
        }
 
-       bool finito = false;
+       bool cleanedList = false;
 
-       while(!finito){
+       while(!cleanedList){
 
-           finito = true;
+           cleanedList = true;
        for (int i = 1; i < peaks.size(); i++) {
            
            float value = peaks.operator[](i)->getValue();
 
-           if (value == 0.0f) { peaks.remove(i, true); finito = false; break; }
+           if (value == 0.0f) { peaks.remove(i, true); cleanedList = false; break; }
        }
        }
        
 
    }
    
-   void adjustPeaks() {
-		
-		
-		
-   }
+
 
 private:
     
@@ -1088,7 +1099,7 @@ private:
     {
     }
 
-     OwnedArray<TimeContainerInfo> tci;
+     
   
     enum TransportState
     {
@@ -1155,9 +1166,7 @@ private:
     void timerCallback() override
     {
 
-       
-       
-           
+          
        if(dtc.isDown)
           {
 
@@ -1165,12 +1174,15 @@ private:
             auto start = dtc.peakMarkers.getLast()->getSample() * (samplerateTE.getText()).getIntValue();
             auto rate = (samplerateTE.getText()).getIntValue();
             auto BPM = (BPMTE.getText()).getIntValue();
-            tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
+
+            peaks.add(new DummyFLoat(1, (int)(start/(float)fftSize),true));
+            UserTci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
             }
             else {
                 
-                peaks.remove(dtc.transientToDelete, true);
-                tci.remove(dtc.transientToDelete, true);
+               /* peaks.remove(dtc.transientToDelete, true);
+                tci.remove(dtc.transientToDelete, true);*/
+                removeTransient(dtc.transientToDelete);
                 gainLabel.setText((String)tci.size(), dontSendNotification);
 
             }
@@ -1179,10 +1191,51 @@ private:
                       
 		   }
 
-       if (dtc.scrollMoved) { dtc.scrollMoved = false; specificGrid(); specificPeaks(); }
+       if (dtc.scrollMoved) { dtc.scrollMoved = false;
+                                specificGrid();
+                                specificPeaks(); }
        
       
       
+    }
+
+
+    void removeTransient(float transientToDelete) {
+
+        auto srate = (samplerateTE.getText()).getIntValue();
+        int difference = 1000000;
+        auto current = srate * transientToDelete;
+        int found = -1;
+
+        for (int i = 0; i < tci.size();i++) {
+
+           auto tpk =  tci.operator[](i)->tpk;
+           
+           if (fabs(tpk - current)<difference) {
+               found = i;
+               difference = fabs(tpk - current);
+           }
+
+        }
+
+        tci.remove(found, true);
+
+        difference = 1000000;
+        found = -1;
+
+        for (int i = 0; i < peaks.size(); i++) {
+
+            auto position = peaks.operator[](i)->getPosition() * fftSize;
+
+            if (fabs(position- current) < difference) {
+                found = i;
+                difference = fabs(position - current);
+            }
+
+        }
+
+        peaks.remove(found,true);
+
     }
     
 
@@ -1239,7 +1292,8 @@ private:
     OwnedArray<DummyFLoat> fluxes;
     OwnedArray<DummyFLoat> thresholdAverage;
     OwnedArray<DummyFLoat> peaks;
-
+    OwnedArray<TimeContainerInfo> tci;
+    OwnedArray<TimeContainerInfo> UserTci;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

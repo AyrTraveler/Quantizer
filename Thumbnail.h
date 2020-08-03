@@ -221,15 +221,13 @@ public:
 
         peakMarkers.add(new CustomRect());
        
-        peakMarkers.getLast()->setFill(Colours::deeppink);
+        peakMarkers.getLast()->setFill(Colours::cyan);
         addAndMakeVisible(*peakMarkers.getLast());
 
         peakMarkers.getLast()->setRectangle(Rectangle<float>(x - 0.75f, 0,
-            1.0f, (float)(getHeight() - scrollbar.getHeight())));
+            0.4f, (float)(getHeight() - scrollbar.getHeight())));
             
-        auto duration = transportSource.getLengthInSeconds();
-        auto w = getWidth();
-        auto audioPosition = (x / w) * duration;
+       
 
             peakMarkers.getLast()->setSample(xToTime(x));
             isDown = true;
@@ -249,13 +247,14 @@ public:
               
                  difference = fabs(i_time - deleteTime);
                  toDelete = i;
+                 transientToDelete = i_time;
              }
          }
 
 
          peakMarkers.operator[](toDelete)->setVisible(false);
          peakMarkers.remove(toDelete,true);
-         transientToDelete = toDelete;
+        
          isDown = true;
      }
 
@@ -272,9 +271,9 @@ public:
 
     void mouseWheelMove(const MouseEvent&, const MouseWheelDetails& wheel) override
     {
-        if (thumbnail.getTotalLength() > 0.0)
+        /*if (thumbnail.getTotalLength() > 0.0)
         {
-            auto newStart = visibleRange.getStart() - wheel.deltaX * (visibleRange.getLength()) / 10.0;
+           auto newStart = visibleRange.getStart() - wheel.deltaX * (visibleRange.getLength()) / 200.0;
             newStart = jlimit(0.0, jmax(0.0, thumbnail.getTotalLength() - (visibleRange.getLength())), newStart);
 
             if (canMoveTransport())
@@ -284,7 +283,7 @@ public:
                 zoomSlider.setValue(zoomSlider.getValue() - wheel.deltaY);
 
             repaint();
-        }
+        }*/
     }
 
     void paintMarkers(TimeContainerInfo* tci, int samplerate) {
@@ -300,12 +299,13 @@ public:
 
     }
 
-    void smartPaint(float audioPos, int pos, bool isPeak) {
+    void smartPaint(float audioPos, int pos, bool isPeak, bool isUser) {
         
         
         if (isPeak) {
             peakMarkers.add(new CustomRect());
-            peakMarkers.getLast()->setFill(juce::Colours::deeppink);
+            Colour c = isUser? juce::Colours::cyan : juce::Colours::deeppink;
+            peakMarkers.getLast()->setFill(c);
         }
             
         else {
@@ -339,7 +339,7 @@ public:
     DrawableRectangle currentLevel;
     float posY;
     double position = 0;
-    int transientToDelete = -1;
+    float transientToDelete = -1;
     bool isDown = false;
     bool deleteActive = false;
     bool isCreated = true;
