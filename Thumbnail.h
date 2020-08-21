@@ -54,10 +54,10 @@ public:
         scrollbar.setAutoHide(false);
         scrollbar.addListener(this);
 
-        currentPositionMarker.setFill(Colours::red.withAlpha(0.45f));
+        currentPositionMarker.setFill(Colours::cyan.withAlpha(0.45f));
         addAndMakeVisible(currentPositionMarker);
-
-        currentLevel.setFill(Colours::lightblue);
+        Colour c;
+        currentLevel.setFill(c.fromRGB(38, 46, 57).brighter(0.99f));
         addAndMakeVisible(currentLevel);
     }
 
@@ -127,7 +127,7 @@ public:
 
         Colour c;
 
-        g.fillAll(c.fromRGB(38, 46, 57));
+        g.fillAll(c.fromRGB(8,9,10));
 
         g.setColour((Colours::orange).withAlpha(0.5f));
 
@@ -156,8 +156,8 @@ public:
     {
         scrollbar.setBounds(getLocalBounds().removeFromBottom(14).reduced(2));
         Colour c;
-        c.fromRGB(38, 46, 57).darker(0.5f);
         scrollbar.setColour(scrollbar.thumbColourId, c.fromRGB(38, 46, 57).darker(0.5f));
+
 
     }
 
@@ -309,8 +309,9 @@ public:
         }
             
         else {
+            Colour c;
             gridMarkers.add(new CustomRect());
-            gridMarkers.getLast()->setFill(juce::Colours::lightgreen);
+            gridMarkers.getLast()->setFill(c.fromRGB(17,18,20).brighter(0.4f));
         }
            
         CustomRect* last = isPeak ? peakMarkers.getLast() : gridMarkers.getLast();
