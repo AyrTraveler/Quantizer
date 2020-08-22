@@ -12,9 +12,10 @@
 #include "TimeContainerInfo.h"
 #include "Thumbnail.h"
 #include "CustomLookAndFeel.h"
-//#include<ctime> 
+
 #include <iostream>
 #include <fstream>
+
 using namespace std;
 using namespace juce;
 //------------------------------------------------------------------------------
@@ -98,9 +99,16 @@ public:
         , stopImageButton("stop", DrawableButton::ImageFitted)
         , pauseImageButton("pause", DrawableButton::ImageFitted)
         , forwardFFT(fftOrder)
+        , aw("Warning","Fill all the input as expected",AlertWindow::WarningIcon)
     {
 
+        setSize(600,600);
+
         
+
+        tci.clear();
+       
+
         startTimerHz(2);
         addAndMakeVisible(InputGroup);
         addAndMakeVisible(TransientGroup);
@@ -138,6 +146,8 @@ public:
         addAndMakeVisible(sGain);
         addAndMakeVisible(gainTextRight);
         addAndMakeVisible(gainTextLeft);
+        addAndMakeVisible(rateSlider);
+        addAndMakeVisible(BPMSlider);
 
         showGridToggle.setClickingTogglesState(true);
         showGridToggle.setToggleState(true, dontSendNotification);
@@ -180,6 +190,9 @@ public:
            resolutionCbox.onChange = [this] {specificGrid(); };
            BPMTE.onTextChange = [this] {specificGrid(); };
 
+           rateSlider.setRange(44100,176100,44100);
+          
+           
            peakSensitivity.setRange(1,32,1);
            peakSensitivity.onDragEnd = [this] { detectOnsets();};
 
@@ -218,7 +231,14 @@ public:
 
        
         quantizeButton.setButtonText("Quantize");
-        quantizeButton.onClick = [this] { quantize((BPMTE.getText()).getIntValue(),4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText()); };
+        quantizeButton.onClick = [this] { 
+            
+            if (checkInputParams()) {
+                quantize((BPMTE.getText()).getIntValue(), 4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText());
+                 aw.showMessageBox(AlertWindow::InfoIcon, "Success", "The file has been correctly exported at: " + outputDirTE.getText(), "Ok");
+            }
+            else aw.showMessageBox(AlertWindow::WarningIcon, "Warning", "Fill all the required fields as expected.", "Ok");
+        };
         quantizeButton.setEnabled(false);
 
         
@@ -241,8 +261,9 @@ public:
         stopImageButton.setEnabled(false);
         pauseImageButton.setEnabled(false);
 
-        
-       // setSize(600, 660);
+        peakSensitivity.setEnabled(false);
+        deleteButton.setEnabled(false);
+        addButton.setEnabled(false);
 
         formatManager.registerBasicFormats();
         transportSource.addChangeListener(this);
@@ -267,9 +288,7 @@ public:
    void paint(Graphics& g) override
     {
         Colour c;
-       /* ColourGradient cg = ColourGradient(c.fromRGB(55, 71, 79), getWidth()/2,0, c.fromRGB(38, 50, 56), getWidth() / 2, getHeight(), false);
-        g.setGradientFill(cg);*/
-
+      
         g.fillAll(c.fromRGB(19,23,26));
        
         Path p;
@@ -280,7 +299,7 @@ public:
         p.closeSubPath();
         g.fillPath(p);
 
-        auto leftLabelX = 45;
+        
         auto y = getHeight() / 2 + 0.33 * InputGroup.getBounds().getHeight();
         auto x = 0.1* InputGroup.getBounds().getWidth() + InputGroup.getBounds().getX();
         auto width = 0.8 * InputGroup.getBounds().getWidth();
@@ -470,18 +489,18 @@ public:
         
          r = InputGroup.getBounds();
         rate.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.15*r.getHeight(), 100, 30);
-        samplerateTE.setBounds(rate.getRight() + 10, r.getY() + 0.15 * r.getHeight(), 80, 25);
+        samplerateTE.setBounds(rate.getRight() + 10, r.getY() + 0.15 * r.getHeight(), 0.8 * r.getWidth() - rate.getWidth(), 25);
         beats.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45* r.getHeight(), 100, 30);
-        BPMTE.setBounds(beats.getRight() + 10, r.getY() + 0.45 * r.getHeight(), 80, 25);
+        BPMTE.setBounds(beats.getRight() + 10, r.getY() + 0.45 * r.getHeight(), 0.8 * r.getWidth() - beats.getWidth(), 25);
         resolution.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 100, 30);
-        resolutionCbox.setBounds(resolution.getRight() + 10, r.getY() + 0.75 * r.getHeight(), 80, 40);
+        resolutionCbox.setBounds(resolution.getRight() + 23, r.getY() + 0.74 * r.getHeight(), 0.8 * r.getWidth() - resolution.getWidth(), 38);
         
         r = OutputGroup.getBounds();
         quantizeButton.setBounds(r.getX() + 0.6 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 0.3 * r.getWidth(), 30);
-        outpath.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45 * r.getHeight(), 0.2*r.getWidth(), 30);
-        outputDirTE.setBounds(r.getX() + 0.4 * r.getWidth(), r.getY() + 0.45 * r.getHeight(), 0.5*r.getWidth(), 35);
+        outpath.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45 * r.getHeight(), 100, 30);
+        outputDirTE.setBounds(outpath.getRight() + 10, r.getY() + 0.43 * r.getHeight(), 0.8 * r.getWidth() - outpath.getWidth(), 35);
         bitdepth.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.15 * r.getHeight(), 100, 30);
-        bitsCbox.setBounds(r.getX() + 0.5 * r.getWidth(), r.getY() + 0.15 * r.getHeight(), 80, 40);
+        bitsCbox.setBounds(bitdepth.getRight() + 10, r.getY() + 0.14 * r.getHeight(), 0.8 * r.getWidth() - bitdepth.getWidth(), 38);
         
         auto peakX = TransientGroup.getBounds().getX() + 0.3 * TransientGroup.getBounds().getWidth();
         auto peakY = TransientGroup.getBounds().getY() + 0.12 * TransientGroup.getBounds().getHeight();
@@ -492,8 +511,8 @@ public:
         r = TransientGroup.getBounds();
         sensitivity.setBounds(r.getX() + 0.35 * r.getWidth(), peakSensitivity.getBounds().getY() + peakSensitivity.getBounds().getHeight()*0.3, 0.3 * OutputGroup.getBounds().getWidth(), 30);
         value.setBounds(r.getX() + 0.35 * r.getWidth(), peakSensitivity.getBounds().getY() + peakSensitivity.getBounds().getHeight()*0.5, 0.3 * OutputGroup.getBounds().getWidth(), 30);
-        deleteButton.setBounds(r.getX() + 0.6 * r.getWidth(), r.getY() + 0.8 * r.getHeight(), 0.2 * r.getWidth(), 30);
-        addButton.setBounds(r.getX() + 0.2 * r.getWidth(), r.getY() + 0.8 * r.getHeight(), 0.2*r.getWidth(), 30);
+        deleteButton.setBounds(r.getX() + 0.6 * r.getWidth(), quantizeButton.getY(), 0.2 * r.getWidth(), 30);
+        addButton.setBounds(r.getX() + 0.2 * r.getWidth(), quantizeButton.getY(), 0.2*r.getWidth(), 30);
        
         
         showGridToggle.setBounds(sliderBounds.getRight() + 10 , sliderBounds.getY() , 50, 25);
@@ -512,8 +531,8 @@ public:
 
         //TEXT
         InputGroup.setText("Input Parameters");
-        OutputGroup.setText("Render");
-        TransientGroup.setText("Transients");
+        OutputGroup.setText("Rendering");
+        TransientGroup.setText("Transients Detection");
         resolution.setText("Resolution", dontSendNotification);
         rate.setText("Sample Rate", dontSendNotification);
         beats.setText("BPM", dontSendNotification);
@@ -648,6 +667,25 @@ public:
     }
 
 
+     bool checkInputParams() {
+
+         auto r = samplerateTE.getText().getIntValue();
+         auto b = BPMTE.getText().getIntValue();
+         auto transientCheck = tci.size() > 0;
+
+         if (1==1) {
+
+           
+
+             auto rateBounds = r < 100000 && r >= 44100;
+             auto BPMBounds = b < 220 && r >= 20;
+
+             return rateBounds && BPMBounds && transientCheck;
+         }
+
+         return false;
+     }
+
 
     bool loadURLIntoTransport(const URL& audioURL)
     {
@@ -694,7 +732,10 @@ public:
                  stopImageButton.setEnabled(true);
                  pauseImageButton.setEnabled(true);
                  quantizeButton.setEnabled(true);
-                
+                 peakSensitivity.setEnabled(true);
+                 deleteButton.setEnabled(true);
+                 addButton.setEnabled(true);
+
                  showAudioResource(URL(dtc.getLastDroppedFile()));
              }
              
@@ -1174,7 +1215,7 @@ public:
        auto rate = (samplerateTE.getText()).getIntValue();
        auto BPM = (BPMTE.getText()).getIntValue();
        tci.clear();
-       UserTci.clear();
+       
        
        //ofstream myfile;
        //myfile.open("example8.txt");
@@ -1255,8 +1296,8 @@ private:
         if(firstTimeStarted){
         BPMTE.setText("120", dontSendNotification);
         samplerateTE.setText("44100", dontSendNotification);
-        gainTextRight.setText("-", dontSendNotification);
-        gainTextLeft.setText("-", dontSendNotification);
+        gainTextRight.setText("", dontSendNotification);
+        gainTextLeft.setText("", dontSendNotification);
         firstTimeStarted = false;
         }
     }
@@ -1318,7 +1359,7 @@ private:
                 auto BPM = (BPMTE.getText()).getIntValue();
 
                 peaks.add(new DummyFLoat(1, (int)(start/(float)fftSize),true));
-                UserTci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
+                tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
             }
             else {
                 
@@ -1388,13 +1429,13 @@ private:
     TextButton addButton;
     TextButton showGridToggle;
 
-
+    AlertWindow aw;
 
     DrawableButton playImageButton;
     DrawableButton stopImageButton;
     DrawableButton pauseImageButton;
 
-    Slider s,sGain,sGainLeft, peakSensitivity;
+    Slider s,sGain,sGainLeft, peakSensitivity, rateSlider, BPMSlider;
     ComboBox resolutionCbox {"combo"};
     ComboBox bitsCbox{ "bits" };
    
@@ -1436,7 +1477,7 @@ private:
     OwnedArray<DummyFLoat> thresholdAverage;
     OwnedArray<DummyFLoat> peaks;
     OwnedArray<TimeContainerInfo> tci;
-    OwnedArray<TimeContainerInfo> UserTci;
+    
     OwnedArray<DrawableRectangle> rect;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

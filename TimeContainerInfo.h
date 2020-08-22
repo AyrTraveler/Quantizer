@@ -27,7 +27,7 @@ public:
     };
 
     bool anticipo, bypassa = false;
-    int tpk, tbk, delta_t, fade;
+    int tpk, tbk, delta_t, fade, sortIndex;
 
 
 

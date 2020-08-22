@@ -58,7 +58,9 @@ public:
         addAndMakeVisible(currentPositionMarker);
         Colour c;
         currentLevel.setFill(c.fromRGB(38, 46, 57).brighter(0.99f));
+        currentLevelDown.setFill(c.fromRGB(38, 46, 57).brighter(0.99f));
         addAndMakeVisible(currentLevel);
+        addAndMakeVisible(currentLevelDown);
     }
 
     ~DemoThumbnailComp()
@@ -215,9 +217,7 @@ public:
     
      void paintSingleMarker(float x) {
 
-         if (x<latestCLick) return;
         
-         latestCLick = x;
 
         peakMarkers.add(new CustomRect());
        
@@ -271,19 +271,7 @@ public:
 
     void mouseWheelMove(const MouseEvent&, const MouseWheelDetails& wheel) override
     {
-        /*if (thumbnail.getTotalLength() > 0.0)
-        {
-           auto newStart = visibleRange.getStart() - wheel.deltaX * (visibleRange.getLength()) / 200.0;
-            newStart = jlimit(0.0, jmax(0.0, thumbnail.getTotalLength() - (visibleRange.getLength())), newStart);
-
-            if (canMoveTransport())
-                setRange({ newStart, newStart + visibleRange.getLength() });
-
-            if (wheel.deltaY != 0.0f)
-                zoomSlider.setValue(zoomSlider.getValue() - wheel.deltaY);
-
-            repaint();
-        }*/
+       
     }
 
     void paintMarkers(TimeContainerInfo* tci, int samplerate) {
@@ -331,13 +319,15 @@ public:
         auto b = thumbArea.reduced(2).getHeight();
         auto c = juce::jmap(maxChannel, 0.0f, 1.0f, 0.0f, (float)b / 2);
         float a = juce::jmap(level, 0.0f, 1.0f, (float)b / 2, (float)b / 2 - c);
+        float d = juce::jmap(level, 0.0f, 1.0f, (float)b / 2, (float)b / 2 + c);
         currentLevel.setRectangle(Rectangle<float>(0, a, (float)getWidth(), 1.5f));
+        currentLevelDown.setRectangle(Rectangle<float>(0, d, (float)getWidth(), 1.5f));
     }
 
     OwnedArray<CustomRect> peakMarkers;
     OwnedArray<CustomRect> gridMarkers;
     Range<double> visibleRange;
-    DrawableRectangle currentLevel;
+    DrawableRectangle currentLevel, currentLevelDown;
     float posY;
     double position = 0;
     float transientToDelete = -1;
