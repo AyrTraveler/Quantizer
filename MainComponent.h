@@ -20,71 +20,6 @@ using namespace std;
 using namespace juce;
 //------------------------------------------------------------------------------
 
-class DummyFLoat {
-
-public:
-
-    DummyFLoat(float val) {
-
-        value = val;
-    }
-
-    float getValue() {
-
-        return value;
-    }
-
-    void setValue(float val) {
-
-        value = val;
-    }
-
-    DummyFLoat(float val, int pos) {
-
-        value = val;
-        position = pos;
-    }
-
-    DummyFLoat(float val, int pos, bool user) {
-
-        value = val;
-        position = pos;
-        isUserTransient = user;
-    }
-
-    float getPosition() {
-
-        return position;
-    }
-
-    void setPosition(int pos) {
-
-        position = pos;
-    }
-
-    void setOffset(int o) {
-
-        offset = o;
-    }
-
-    int getOffset() {
-
-        return offset;
-    }
-
-    bool getUserTransient() {
-
-        return isUserTransient;
-    }
-
-private:
-
-
-    float value;
-    int position = 0;
-    int offset  = 0 ;
-    bool isUserTransient = false;
-};
 
 
 class MainComponent : public AudioAppComponent,
@@ -99,7 +34,7 @@ public:
         , stopImageButton("stop", DrawableButton::ImageFitted)
         , pauseImageButton("pause", DrawableButton::ImageFitted)
         , forwardFFT(fftOrder)
-        , aw("Warning","Fill all the input as expected",AlertWindow::WarningIcon)
+        , aw("","",AlertWindow::WarningIcon)
     {
 
         setSize(600,600);
@@ -115,10 +50,6 @@ public:
         addAndMakeVisible(OutputGroup);
         addAndMakeVisible(peakSensitivity);
        
-        
-        addAndMakeVisible(deleteTransient);
-      
-        
         addAndMakeVisible(sGainLeft);
         addAndMakeVisible(resolution);
         addAndMakeVisible(rate);
@@ -194,7 +125,11 @@ public:
           
            
            peakSensitivity.setRange(1,32,1);
-           peakSensitivity.onDragEnd = [this] { detectOnsets();};
+           peakSensitivity.onDragEnd = [this] { detectOnsets();
+           
+           gainTextRight.setText((String)tci.size(),dontSendNotification);
+           
+           };
 
            peakSensitivity.onValueChange = [this] {
                
@@ -233,11 +168,11 @@ public:
         quantizeButton.setButtonText("Quantize");
         quantizeButton.onClick = [this] { 
             
-            if (checkInputParams()) {
-                quantize((BPMTE.getText()).getIntValue(), 4, (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText());
-                 aw.showMessageBox(AlertWindow::InfoIcon, "Success", "The file has been correctly exported at: " + outputDirTE.getText(), "Ok");
-            }
-            else aw.showMessageBox(AlertWindow::WarningIcon, "Warning", "Fill all the required fields as expected.", "Ok");
+                sortList();
+                quantize((BPMTE.getText()).getIntValue(), getResolutionIndex(), (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText());
+                aw.showMessageBox(AlertWindow::InfoIcon, "Success", "The file has been correctly exported at: " + outputDirTE.getText(), "Ok");
+       
+            
         };
         quantizeButton.setEnabled(false);
 
@@ -280,7 +215,6 @@ public:
 
     ~MainComponent() override
     {
-       
        
         shutdownAudio();
     }
@@ -496,7 +430,7 @@ public:
         resolutionCbox.setBounds(resolution.getRight() + 23, r.getY() + 0.74 * r.getHeight(), 0.8 * r.getWidth() - resolution.getWidth(), 38);
         
         r = OutputGroup.getBounds();
-        quantizeButton.setBounds(r.getX() + 0.6 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 0.3 * r.getWidth(), 30);
+        quantizeButton.setBounds(r.getX() + 0.6 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 0.2 * r.getWidth(), 30);
         outpath.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45 * r.getHeight(), 100, 30);
         outputDirTE.setBounds(outpath.getRight() + 10, r.getY() + 0.43 * r.getHeight(), 0.8 * r.getWidth() - outpath.getWidth(), 35);
         bitdepth.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.15 * r.getHeight(), 100, 30);
@@ -658,6 +592,56 @@ public:
 
     }
 
+    void changeListenerCallback(ChangeBroadcaster* source) override
+    {
+
+
+        if (source == &dtc) {
+
+            String fname = dtc.getLastDroppedFile().getFileName();
+            bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
+
+            if (isWav) {
+
+                if (dtc.isCreated) {
+                    initSample = initPeak((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
+                    dtc.isCreated = false;
+                }
+
+                dtc.drawLevel(sGain.getValue(), maxChannel);
+                playImageButton.setEnabled(true);
+                stopImageButton.setEnabled(true);
+                pauseImageButton.setEnabled(true);
+                quantizeButton.setEnabled(true);
+                peakSensitivity.setEnabled(true);
+                deleteButton.setEnabled(true);
+                addButton.setEnabled(true);
+
+                showAudioResource(URL(dtc.getLastDroppedFile()));
+            }
+
+
+            if (!dtc.getLastDroppedFile().isEmpty() && isWav) {
+
+
+                outputDirTE.setText(File::getCurrentWorkingDirectory().getFullPathName()
+                    + "\\" +
+                    dtc.getLastDroppedFile().getFileName().replace(".WAV", "_NEW.WAV", true).replace("%20", " ", true)
+                    , dontSendNotification);
+
+                maxChannel = detectMax(dtc.getLastDroppedFile().getLocalFile());
+                specificGrid();
+                specificPeaks();
+                quantizeButton.setEnabled(true);
+
+            }
+
+            sGain.setValue(0);
+        }
+
+
+
+    }
 
      void showAudioResource(URL resource)
     {
@@ -711,58 +695,9 @@ public:
     }
 
 
-    void changeListenerCallback(ChangeBroadcaster* source) override
-    {
+   
 
-
-         if (source == &dtc){
-           
-             String fname = dtc.getLastDroppedFile().getFileName();
-             bool isWav = fname.contains(".wav")  || fname.contains(".Wav") || fname.contains(".WAV");
-            
-             if (isWav) {
-
-                 if(dtc.isCreated){
-                 initSample = initPeak((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
-                 dtc.isCreated = false;
-                 }
-
-                 dtc.drawLevel(sGain.getValue(), maxChannel);
-                 playImageButton.setEnabled(true);
-                 stopImageButton.setEnabled(true);
-                 pauseImageButton.setEnabled(true);
-                 quantizeButton.setEnabled(true);
-                 peakSensitivity.setEnabled(true);
-                 deleteButton.setEnabled(true);
-                 addButton.setEnabled(true);
-
-                 showAudioResource(URL(dtc.getLastDroppedFile()));
-             }
-             
-            
-            if (!dtc.getLastDroppedFile().isEmpty() && isWav) {
-                
-                
-                outputDirTE.setText(File::getCurrentWorkingDirectory().getFullPathName() 
-                    +"\\"+
-                    dtc.getLastDroppedFile().getFileName().replace(".WAV", "_NEW.WAV",true).replace("%20", " ", true)
-                    ,dontSendNotification);
-
-                maxChannel = detectMax(dtc.getLastDroppedFile().getLocalFile());
-                specificGrid();
-                specificPeaks();
-                quantizeButton.setEnabled(true);
-                              
-            }
-            
-            sGain.setValue(0);
-           }
-
-       
-            
-    }
-
-	 int getClosestBeat(int BPM, int samplerate, float divider,int i, bool isPeak) {
+	 int getClosestBeat(int BPM, int samplerate, float divider,int i, bool isUser) {
        
      
          float BPS = BPM / 60.0F;
@@ -784,7 +719,7 @@ public:
              }
              else {
 
-                 if ((init - time) > sampleQuantum && (-prev + time) > sampleQuantum) {
+                 if (!isUser && (init - time) > sampleQuantum && (-prev + time) > sampleQuantum) {
                      return -1;
                  }
 
@@ -862,6 +797,41 @@ public:
 
     }
 
+    void sortList() {
+
+
+        auto N = tci.size();
+
+        int TPK,TBK, delta,fade;
+        bool anticipo;
+
+        for (int j = 0; j < N - 1; j++)
+            for (int i = 0; i < N - 1; i++)
+                if (tci.operator[](i)->getTPK() > tci.operator[](i + 1)->getTPK())
+                {
+                    TPK = tci.operator[](i)->getTPK();
+                    tci.operator[](i)->setTPK(tci.operator[](i+1)->getTPK());
+                    tci.operator[](i+1)->setTPK(TPK);
+
+                    TBK = tci.operator[](i)->getTBK();
+                    tci.operator[](i)->setTBK(tci.operator[](i + 1)->getTBK());
+                    tci.operator[](i + 1)->setTBK(TBK);
+
+                    delta = tci.operator[](i)->getDelta();
+                    tci.operator[](i)->setDelta(tci.operator[](i + 1)->getDelta());
+                    tci.operator[](i + 1)->setDelta(delta);
+
+                    fade = tci.operator[](i)->getFade();
+                    tci.operator[](i)->setFade(tci.operator[](i + 1)->getFade());
+                    tci.operator[](i + 1)->setFade(fade);
+
+                    anticipo = tci.operator[](i)->getAnticipo();
+                    tci.operator[](i)->setAnticipo(tci.operator[](i + 1)->getAnticipo());
+                    tci.operator[](i + 1)->setAnticipo(anticipo);
+                }
+
+     
+     }
 
 
  void quantize(int BPM, int divider, int samplerate, File fileName, String newFileName)
@@ -892,22 +862,25 @@ public:
             reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
             int current = 0, tot = reader->lengthInSamples;
         
+            /*    ofstream myfile;
+    myfile.open("example9.txt");
+    myfile << (String)tci.size()   + "\n";*/
 
             for (int i = 0; i < tci.size(); i++) {
            
-            bool anticipo = tci.operator[](i)->anticipo;
-            int tpk = tci.operator[](i)->tpk;
-            int tbk = tci.operator[](i)->tbk;
-            int fd = tci.operator[](i)->fade;
+            bool anticipo = tci.operator[](i)->getAnticipo();
+            int tpk = tci.operator[](i)->getTPK();
+            int tbk = tci.operator[](i)->getTBK();
+            int fd = tci.operator[](i)->getFade();
             float fd_square = fd * fd;
-            int delta = tci.operator[](i)->delta_t;
+            int delta = tci.operator[](i)->getDelta();
             int starting = tpk - fd - delta;
          
-            bool anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->anticipo;
-            int tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tpk;
-            int tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->tbk;
-            int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->fade:tci.operator[](i+1)->fade;
-            int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->delta_t:tci.operator[](i+1)->delta_t;
+            bool anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->getAnticipo();
+            int tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTPK();
+            int tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTBK();
+            int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->getFade() :tci.operator[](i+1)->getFade();
+            int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->getDelta() :tci.operator[](i+1)->getDelta();
             int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
             
             if(anticipo && anticipo_1){
@@ -972,6 +945,8 @@ public:
   }
 
 
+
+  /*-------------TRANSIENTS DETECTION-------------------*/
 
   void detectOnsets(float sensitivity = 1.5f)
   {
@@ -1217,9 +1192,7 @@ public:
        tci.clear();
        
        
-       //ofstream myfile;
-       //myfile.open("example8.txt");
-       
+     
        /*tolgo transient troppo vicini e aggiungo peaks all'array di pointer*/
        for (int i = 1; i < size; i++) {
 
@@ -1227,7 +1200,7 @@ public:
 
            if (value > 0) {
                
-               int closestBeat = getClosestBeat(BPM, rate, getResolutionIndex(), i * fftSize, true);
+               int closestBeat = getClosestBeat(BPM, rate, getResolutionIndex(), i * fftSize, false);
             
                if (closestBeat  < 0 ) peaks.operator[](i)->setValue(0.0f);
                else {
@@ -1303,13 +1276,6 @@ private:
     }
    
 
-    float computeGain(int fade, float square, int j, bool asc) {
-
-            return asc ? 2 * (float)j / (float)fade - (float)(j * j) / square
-                       : 1 - (float)(j * j) / square;
-    }
-
-  
 
     void playButtonClicked()
     {
@@ -1359,7 +1325,7 @@ private:
                 auto BPM = (BPMTE.getText()).getIntValue();
 
                 peaks.add(new DummyFLoat(1, (int)(start/(float)fftSize),true));
-                tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,false)));
+                tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,true)));
             }
             else {
                 
@@ -1389,7 +1355,7 @@ private:
 
         for (int i = 0; i < tci.size();i++) {
 
-           auto tpk =  tci.operator[](i)->tpk;
+           auto tpk =  tci.operator[](i)->getTPK();
            
            if (fabs(tpk - current)<difference) {
                found = i;
@@ -1420,7 +1386,9 @@ private:
     
 
     //==========================================================================
-    
+
+    AlertWindow aw;
+
     TextButton openButton;
     TextButton playButton;
     TextButton stopButton;
@@ -1428,8 +1396,6 @@ private:
     TextButton deleteButton;
     TextButton addButton;
     TextButton showGridToggle;
-
-    AlertWindow aw;
 
     DrawableButton playImageButton;
     DrawableButton stopImageButton;
@@ -1440,7 +1406,7 @@ private:
     ComboBox bitsCbox{ "bits" };
    
     Label resolution, rate, beats, bitdepth, outpath, gainTextRight, gainTextLeft, sensitivity, value;
-    ToggleButton useTriplets, deleteTransient;
+    ToggleButton useTriplets;
 
     TextEditor samplerateTE, BPMTE, outputDirTE;
     GroupComponent InputGroup, TransientGroup, OutputGroup;
@@ -1461,8 +1427,8 @@ private:
     String outPath = File::getCurrentWorkingDirectory().getFullPathName();
     float maxChannel=0;
     float position = 0.0f;
-    bool firstDropped = true;
     bool firstTimeStarted = true;
+    
     enum
     {
         fftOrder = 10,
@@ -1477,8 +1443,8 @@ private:
     OwnedArray<DummyFLoat> thresholdAverage;
     OwnedArray<DummyFLoat> peaks;
     OwnedArray<TimeContainerInfo> tci;
-    
     OwnedArray<DrawableRectangle> rect;
+   
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 

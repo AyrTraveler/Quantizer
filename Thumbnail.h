@@ -276,7 +276,7 @@ public:
 
     void paintMarkers(TimeContainerInfo* tci, int samplerate) {
 
-        float pos = (float)tci->tpk / (float)samplerate;
+        float pos = (float)tci->getTPK() / (float)samplerate;
         peakMarkers.add(new CustomRect());
         
         peakMarkers.getLast()->setFill(Colours::deeppink);

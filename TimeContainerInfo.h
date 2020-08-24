@@ -26,11 +26,64 @@ public:
         fade = (int)(delta_t / 4.0);
     };
 
-    bool anticipo, bypassa = false;
-    int tpk, tbk, delta_t, fade, sortIndex;
 
+    bool getAnticipo() { return anticipo; }
+    int getTPK() { return tpk; }
+    int getTBK() { return tbk; }
+    int getDelta() { return delta_t; }
+    int getFade() { return fade; }
+
+
+    void setTPK(int value) { tpk = value; }
+    void setTBK(int value) { tbk = value; }
+    void setDelta(int value) { delta_t = value; }
+    void setFade(int value) { fade = value; }
+    void setAnticipo(bool value) { anticipo = value; }
+   
+private:
+
+    bool anticipo;
+    int tpk, tbk, delta_t, fade;
 
 
 
 
 };
+
+class DummyFLoat {
+
+public:
+
+    DummyFLoat(float val) { value = val;}
+
+
+
+    DummyFLoat(float val, int pos) {
+
+        value = val;
+        position = pos;
+    }
+
+    DummyFLoat(float val, int pos, bool user) {
+
+        value = val;
+        position = pos;
+        isUserTransient = user;
+    }
+
+    float getValue() { return value; }
+    void setValue(float val) { value = val; }
+    float getPosition() { return position;}
+    void setPosition(int pos) {position = pos;}
+    void setOffset(int o) {offset = o;}
+    int getOffset() { return offset;}
+    bool getUserTransient() { return isUserTransient;}
+
+private:
+
+    float value;
+    int position = 0;
+    int offset = 0;
+    bool isUserTransient = false;
+};
+
