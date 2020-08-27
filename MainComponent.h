@@ -20,7 +20,7 @@ using namespace std;
 using namespace juce;
 //------------------------------------------------------------------------------
 
-
+#define PI_GREEK 3.1415926
 
 class MainComponent : public AudioAppComponent,
     public ChangeListener, private Timer
@@ -38,18 +38,13 @@ public:
     {
 
         setSize(600,600);
-
-        
-
         tci.clear();
-       
-
-        startTimerHz(2);
+        startTimerHz(6);
+        
         addAndMakeVisible(InputGroup);
         addAndMakeVisible(TransientGroup);
         addAndMakeVisible(OutputGroup);
         addAndMakeVisible(peakSensitivity);
-       
         addAndMakeVisible(sGainLeft);
         addAndMakeVisible(resolution);
         addAndMakeVisible(rate);
@@ -58,8 +53,6 @@ public:
         addAndMakeVisible(value);
         addAndMakeVisible(bitdepth);
         addAndMakeVisible(outpath);
-        addAndMakeVisible(samplerateTE);
-        addAndMakeVisible(BPMTE);
         addAndMakeVisible(outputDirTE);
         addAndMakeVisible(resolutionCbox);
         addAndMakeVisible(bitsCbox);
@@ -74,7 +67,7 @@ public:
         addAndMakeVisible(&playImageButton);
         addAndMakeVisible(&stopImageButton);
         addAndMakeVisible(&pauseImageButton);
-        addAndMakeVisible(sGain);
+        addAndMakeVisible(sGainRight);
         addAndMakeVisible(gainTextRight);
         addAndMakeVisible(gainTextLeft);
         addAndMakeVisible(rateSlider);
@@ -86,26 +79,25 @@ public:
         deleteButton.onStateChange = [this] {dtc.deleteActive = deleteButton.getToggleState(); };
         showGridToggle.onStateChange = [this] {specificGrid(); };
 
-        
 
         Value sharedValue;
         sharedValue = Random::getSystemRandom().nextDouble() * 100;
-        sGain.getValueObject().referTo(sharedValue);
+        sGainRight.getValueObject().referTo(sharedValue);
         sGainLeft.getValueObject().referTo(sharedValue);
         
-        sGain.onValueChange = [this] {
+        sGainRight.onValueChange = [this] {
             
-            dtc.drawLevel(sGain.getValue(), maxChannel);
-            if (!dtc.getLastDroppedFile().isEmpty()) gainTextRight.setText(remap(sGain.getValue(), maxChannel), dontSendNotification);
-            gainTextLeft.setText(remap(sGain.getValue(), maxChannel), dontSendNotification);
+            dtc.drawLevel(sGainRight.getValue(), maxChannel);
+            if (!dtc.getLastDroppedFile().isEmpty()) gainTextRight.setText(remap(sGainRight.getValue(), maxChannel), dontSendNotification);
+            gainTextLeft.setText(remap(sGainRight.getValue(), maxChannel), dontSendNotification);
         };
 
 
         sGainLeft.onValueChange = [this] {
             
-            dtc.drawLevel(sGain.getValue(), maxChannel);
-            if (!dtc.getLastDroppedFile().isEmpty()) gainTextRight.setText(remap(sGain.getValue(), maxChannel), dontSendNotification);
-            gainTextLeft.setText(remap(sGain.getValue(), maxChannel), dontSendNotification); };
+            dtc.drawLevel(sGainRight.getValue(), maxChannel);
+            if (!dtc.getLastDroppedFile().isEmpty()) gainTextRight.setText(remap(sGainRight.getValue(), maxChannel), dontSendNotification);
+            gainTextLeft.setText(remap(sGainRight.getValue(), maxChannel), dontSendNotification); };
 
         bitsCbox.addItem("16", 1);
         bitsCbox.addItem("24", 2);
@@ -117,75 +109,81 @@ public:
         resolutionCbox.addItem("1/16", 4);
         resolutionCbox.setSelectedItemIndex(2);
            
+       
+        resolutionCbox.onChange = [this] {specificGrid(); };
+        BPMSlider.onValueChange = [this] {specificGrid(); };
+
+        rateSlider.setRange(44100,176100,44100);
+        rateSlider.setNumDecimalPlacesToDisplay(0);
+        rateSlider.setSliderStyle(Slider::LinearHorizontal);
+        rateSlider.setTextBoxStyle(Slider::TextEntryBoxPosition::TextBoxRight, true, 80, 50);
+        rateSlider.setColour(Slider::thumbColourId, Colours::orange.withAlpha(0.5f));
+        rateSlider.setColour(Slider::textBoxOutlineColourId, Colours::transparentBlack);
+        rateSlider.setColour(Slider::textBoxBackgroundColourId, Colours::transparentBlack);
+        rateSlider.setColour(Slider::textBoxTextColourId, outputDirTE.findColour(TextEditor::textColourId));
+        rateSlider.setTextBoxIsEditable(true);
+        
+        BPMSlider.setRange(40,200,1);
+        BPMSlider.setNumDecimalPlacesToDisplay(0);
+        BPMSlider.setSliderStyle(Slider::LinearHorizontal);
+        BPMSlider.setTextBoxStyle(Slider::TextEntryBoxPosition::TextBoxRight, true, 80, 50);
+        BPMSlider.setColour(Slider::thumbColourId, Colours::orange.withAlpha(0.5f));
+        BPMSlider.setColour(Slider::textBoxOutlineColourId, Colours::transparentBlack);
+        BPMSlider.setColour(Slider::textBoxBackgroundColourId, Colours::transparentBlack);
+        BPMSlider.setColour(Slider::textBoxTextColourId, outputDirTE.findColour(TextEditor::textColourId));
+        BPMSlider.setTextBoxIsEditable(true);
+        
+        BPMSlider.setValue(120, sendNotification);
+        rateSlider.setValue(44100, sendNotification);
+
+        peakSensitivity.setRange(1,32,1);
+        peakSensitivity.onDragEnd = [this] { detectOnsets();
+                                            gainTextRight.setText((String)tci.size(),dontSendNotification);};
+
+        peakSensitivity.onValueChange = [this] { value.setText((String)peakSensitivity.getValue(), dontSendNotification);};
+          
+        peakSensitivity.setSliderStyle(Slider::Rotary);
+        peakSensitivity.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+        peakSensitivity.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
+
+        s.setRange(0, 1, 0);
+        s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); specificPeaks(); specificGrid(); };
+        s.setSkewFactor(2);
+        s.setSliderStyle(Slider::LinearHorizontal);
+        s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+        s.setColour(Slider::thumbColourId, Colours::orange.withAlpha(0.5f));
+           
            Colour barCol;
-           resolutionCbox.onChange = [this] {specificGrid(); };
-           BPMTE.onTextChange = [this] {specificGrid(); };
-
-           rateSlider.setRange(44100,176100,44100);
           
-           
-           peakSensitivity.setRange(1,32,1);
-           peakSensitivity.onDragEnd = [this] { detectOnsets();
-           
-           gainTextRight.setText((String)tci.size(),dontSendNotification);
-           
-           };
+         sGainRight.setRange(0, 1, 0);
+         sGainRight.setSliderStyle(Slider::LinearBarVertical);
+         sGainRight.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+         sGainRight.setColour(Slider::textBoxOutlineColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
+         sGainRight.setColour(Slider::trackColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
 
-           peakSensitivity.onValueChange = [this] {
-               
-               value.setText((String)peakSensitivity.getValue(), dontSendNotification);
-
-           };
-          
-           peakSensitivity.setSliderStyle(Slider::Rotary);
-           peakSensitivity.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-           peakSensitivity.setColour(Slider::thumbColourId,Colours::orange.withAlpha(0.5f));
-
-           s.setRange(0, 1, 0);
-           s.onValueChange = [this] { dtc.setZoomFactor(s.getValue()); specificPeaks(); specificGrid(); };
-           s.setSkewFactor(2);
-           s.setSliderStyle(Slider::LinearHorizontal);
-           s.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-           s.setColour(Slider::thumbColourId, Colours::orange.withAlpha(0.5f));
-           
-
-          
-              sGain.setRange(0, 1, 0);
-             
-              sGain.setSliderStyle(Slider::LinearBarVertical);
-              sGain.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-              sGain.setColour(Slider::textBoxOutlineColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
-              sGain.setColour(Slider::trackColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
-
-              dtc.addChangeListener(this);
-              sGainLeft.setRange(0, 1, 0);
-              sGainLeft.setSliderStyle(Slider::LinearBarVertical);
-              sGainLeft.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-              sGainLeft.setColour(Slider::textBoxOutlineColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
-              sGainLeft.setColour(Slider::trackColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
+         sGainLeft.setRange(0, 1, 0);
+         sGainLeft.setSliderStyle(Slider::LinearBarVertical);
+         sGainLeft.setTextBoxStyle(Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+         sGainLeft.setColour(Slider::textBoxOutlineColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
+         sGainLeft.setColour(Slider::trackColourId, barCol.fromRGB(38, 46, 57).darker(0.7f));
 
        
         quantizeButton.setButtonText("Quantize");
         quantizeButton.onClick = [this] { 
-            
                 sortList();
-                quantize((BPMTE.getText()).getIntValue(), getResolutionIndex(), (samplerateTE.getText()).getIntValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText());
+                quantize(BPMSlider.getValue(), getResolutionIndex(), rateSlider.getValue(), dtc.getLastDroppedFile().getLocalFile(), outputDirTE.getText());
                 aw.showMessageBox(AlertWindow::InfoIcon, "Success", "The file has been correctly exported at: " + outputDirTE.getText(), "Ok");
-       
             
         };
         quantizeButton.setEnabled(false);
 
-        
         deleteButton.setButtonText("Delete");
         deleteButton.setClickingTogglesState(true);
         deleteButton.setToggleState(false,dontSendNotification);
-
+        deleteButton.setRadioGroupId(345);
         addButton.setButtonText("Add");
         addButton.setClickingTogglesState(true);
         addButton.setToggleState(true, dontSendNotification);
-
-        deleteButton.setRadioGroupId(345);
         addButton.setRadioGroupId(345);
         
         playImageButton.onClick = [this] {playButtonClicked(); };
@@ -206,24 +204,29 @@ public:
         setAudioChannels(2, 2);
         thread.startThread(3);
 
+        dtc.addChangeListener(this);
+
         auto* claf = new CustomLookAndFeel();
         addLookAndFeel(claf, "Custom Look And Feel");
         setupCustomLookAndFeelColours(*claf);
         setAllLookAndFeels(lookAndFeels.operator[](0));
 
+
+        BPMSlider.setValue(120, sendNotification);
+        rateSlider.setValue(44100, sendNotification);
+        gainTextRight.setText("", dontSendNotification);
+        gainTextLeft.setText("", dontSendNotification);
+
     }
 
     ~MainComponent() override
     {
-       
         shutdownAudio();
     }
 
    void paint(Graphics& g) override
     {
-        Colour c;
-      
-        g.fillAll(c.fromRGB(19,23,26));
+        g.fillAll(Colour(19,22,27));
        
         Path p;
         p.startNewSubPath(0,0);
@@ -242,15 +245,13 @@ public:
         for(int i = 0; i<4; i ++){
             
             rect.add(new DrawableRectangle());
-            rect.getLast()->setFill(c.fromRGB(38, 46, 57));
+            rect.getLast()->setFill(Colour(28, 31, 38));
             addAndMakeVisible(*rect.getLast());
 
             auto offsetY = (i%2==0)? 0.33:0.66;
             auto posX =    (i<2)?    InputGroup.getBounds().getX(): OutputGroup.getBounds().getX();
             y = getHeight() / 2 + offsetY * InputGroup.getBounds().getHeight();
             x = 0.1 * InputGroup.getBounds().getWidth() + posX;
-         
-
             rect.operator[](i)->setRectangle(Rectangle<float>(x,y,width,height));
 
         }
@@ -305,24 +306,19 @@ public:
     
     String remap(float a, float b) {
 
-
-        float c = juce::jmap(a, 0.0f, 1.0f, 0.0f, b);
-        float d = Decibels::gainToDecibels(c);
-       
-        String e = String(d,1);
+        auto c = juce::jmap(a, 0.0f, 1.0f, 0.0f, b);
+        auto d = Decibels::gainToDecibels(c);
+        auto e = String(d,1);
         
-        return a==0.0f? "-inf" :(String)e;
+        return a==0.0f? "- inf" : e;
     }
 
     float remapValue(float a, float b) {
-
 
         return juce::jmap(a, 0.0f, 1.0f, 0.0f, b);
         
     }
 
-  
-   
     void specificGrid() {
 
         if (!showGridToggle.getToggleState()) {
@@ -333,24 +329,19 @@ public:
             return;
         }
 
-        int BPM = (BPMTE.getText()).getIntValue();
-        int samplerate = (samplerateTE.getText()).getIntValue();
+        int BPM = BPMSlider.getValue();
+        int samplerate = rateSlider.getValue();
         float divider = getResolutionIndex();
         float BPS = BPM / 60.0F;
         float sampleQuantum = (float)samplerate / BPS / divider;  //quanti sample sono i 16esimi in base al samplerate
         int realSampleQuantum = sampleQuantum - floor(sampleQuantum) > 0.5 ? ceil(sampleQuantum) : floor(sampleQuantum);
-
-       
-        
+  
         dtc.gridMarkers.clear();
         
         juce::int64 start = dtc.visibleRange.getStart()* samplerate;
         juce::int64 end = dtc.visibleRange.getEnd() * samplerate;
-
         juce::int64 counter = initSample;
         int cc = 0;
-
-
 
         while (counter<audioLen) {
             
@@ -365,10 +356,7 @@ public:
 
             counter += realSampleQuantum;
             
-            
         }
-
-     
 
     }
 
@@ -376,12 +364,10 @@ public:
        
         dtc.smartClear();
         int size = peaks.size();
-        int samplerate = (samplerateTE.getText()).getIntValue();
+        int samplerate = rateSlider.getValue();
 
         for (int i = 0; i < size; i++) {
-            
-            
-
+         
             if (peaks.operator[](i)->getValue()>0) {
 
                 auto position = peaks.operator[](i)->getPosition();
@@ -423,18 +409,18 @@ public:
         
          r = InputGroup.getBounds();
         rate.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.15*r.getHeight(), 100, 30);
-        samplerateTE.setBounds(rate.getRight() + 10, r.getY() + 0.15 * r.getHeight(), 0.8 * r.getWidth() - rate.getWidth(), 25);
+        rateSlider.setBounds(rate.getRight() + 10, r.getY() + 0.15 * r.getHeight(), 0.8 * r.getWidth() - rate.getWidth(), 30);
         beats.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45* r.getHeight(), 100, 30);
-        BPMTE.setBounds(beats.getRight() + 10, r.getY() + 0.45 * r.getHeight(), 0.8 * r.getWidth() - beats.getWidth(), 25);
+        BPMSlider.setBounds(beats.getRight() + 10, r.getY() + 0.45 * r.getHeight(), 0.8 * r.getWidth() - beats.getWidth(), 30);
         resolution.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 100, 30);
-        resolutionCbox.setBounds(resolution.getRight() + 23, r.getY() + 0.74 * r.getHeight(), 0.8 * r.getWidth() - resolution.getWidth(), 38);
+        resolutionCbox.setBounds(resolution.getRight() + 0.2 * r.getWidth(), r.getY() + 0.74 * r.getHeight(), 0.4 * r.getWidth() - resolution.getWidth(), 38);
         
         r = OutputGroup.getBounds();
         quantizeButton.setBounds(r.getX() + 0.6 * r.getWidth(), r.getY() + 0.75 * r.getHeight(), 0.2 * r.getWidth(), 30);
         outpath.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.45 * r.getHeight(), 100, 30);
         outputDirTE.setBounds(outpath.getRight() + 10, r.getY() + 0.43 * r.getHeight(), 0.8 * r.getWidth() - outpath.getWidth(), 35);
         bitdepth.setBounds(r.getX() + 0.1 * r.getWidth(), r.getY() + 0.15 * r.getHeight(), 100, 30);
-        bitsCbox.setBounds(bitdepth.getRight() + 10, r.getY() + 0.14 * r.getHeight(), 0.8 * r.getWidth() - bitdepth.getWidth(), 38);
+        bitsCbox.setBounds(bitdepth.getRight() + 0.2 * r.getWidth(), r.getY() + 0.14 * r.getHeight(), 0.4 * r.getWidth() - bitdepth.getWidth(), 38);
         
         auto peakX = TransientGroup.getBounds().getX() + 0.3 * TransientGroup.getBounds().getWidth();
         auto peakY = TransientGroup.getBounds().getY() + 0.12 * TransientGroup.getBounds().getHeight();
@@ -448,17 +434,14 @@ public:
         deleteButton.setBounds(r.getX() + 0.6 * r.getWidth(), quantizeButton.getY(), 0.2 * r.getWidth(), 30);
         addButton.setBounds(r.getX() + 0.2 * r.getWidth(), quantizeButton.getY(), 0.2*r.getWidth(), 30);
        
-        
         showGridToggle.setBounds(sliderBounds.getRight() + 10 , sliderBounds.getY() , 50, 25);
-        
-    
+       
         s.setBounds(sliderBounds);
         dtc.setBounds(dtcBounds);
-        sGain.setBounds(sGainRightBounds);
+        sGainRight.setBounds(sGainRightBounds);
         sGainLeft.setBounds(sGainLeftBounds);
 
-
-        r = sGain.getBounds();
+        r = sGainRight.getBounds();
         gainTextRight.setBounds(r.getX()-6, r.getBottomLeft().getY() + 6, 40, 24);
         r = sGainLeft.getBounds();
         gainTextLeft.setBounds(r.getX()-6, r.getBottomLeft().getY() + 6, 40, 24);
@@ -484,62 +467,50 @@ public:
         beats.setJustificationType(Justification::left);
         bitsCbox.setJustificationType(Justification::centred);
         outpath.setJustificationType(Justification::left);
-        samplerateTE.setJustification(Justification::centred);
-        BPMTE.setJustification(Justification::centred);
         bitdepth.setJustificationType(Justification::left);
         sensitivity.setJustificationType(Justification::centred);
         value.setJustificationType(Justification::centred);
         bitsCbox.setJustificationType(Justification::centred);
 
         //COLOURS
-        Colour c;
-        resolution.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        rate.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        beats.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        sensitivity.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        value.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        bitdepth.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        outpath.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.25f));
-        gainTextRight.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.3f));
-        gainTextLeft.setColour(Label::textColourId, c.fromRGB(38, 46, 57).brighter(0.3f));
-        InputGroup.setColour(GroupComponent::textColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
-        InputGroup.setColour(GroupComponent::outlineColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
-        OutputGroup.setColour(GroupComponent::textColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
-        OutputGroup.setColour(GroupComponent::outlineColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
-        TransientGroup.setColour(GroupComponent::textColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
-        TransientGroup.setColour(GroupComponent::outlineColourId, c.fromRGB(38, 46, 57).brighter(0.6f));
+     
+        resolution.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        rate.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        beats.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        sensitivity.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        value.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        bitdepth.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        outpath.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.25f));
+        gainTextRight.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.3f));
+        gainTextLeft.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.3f));
+        InputGroup.setColour(GroupComponent::textColourId, Colour(86, 96, 105));
+        InputGroup.setColour(GroupComponent::outlineColourId, Colour(86, 96, 105));
+        OutputGroup.setColour(GroupComponent::textColourId, Colour(86, 96, 105));
+        OutputGroup.setColour(GroupComponent::outlineColourId, Colour(86, 96, 105));
+        TransientGroup.setColour(GroupComponent::textColourId, Colour(86, 96, 105));
+        TransientGroup.setColour(GroupComponent::outlineColourId, Colour(86, 96, 105));
         deleteButton.setColour(TextButton::buttonOnColourId, Colours::orange);
         addButton.setColour(TextButton::buttonOnColourId, Colours::orange);
         showGridToggle.setColour(TextButton::buttonOnColourId, Colours::orange);
-
         deleteButton.setColour(TextButton::textColourOffId, deleteButton.findColour(TextButton::textColourOnId).darker(0.3f));
         addButton.setColour(TextButton::textColourOffId, deleteButton.findColour(TextButton::textColourOnId).darker(0.3f));
         showGridToggle.setColour(TextButton::textColourOffId, deleteButton.findColour(TextButton::textColourOnId).darker(0.3f));
-
-        samplerateTE.setColour(TextEditor::outlineColourId, Colours::transparentBlack);
-        samplerateTE.setColour(TextEditor::backgroundColourId, Colours::transparentBlack);
-        samplerateTE.setColour(TextEditor::focusedOutlineColourId, Colours::transparentBlack);
-
-        BPMTE.setColour(TextEditor::outlineColourId, Colours::transparentBlack);
-        BPMTE.setColour(TextEditor::backgroundColourId, Colours::transparentBlack);
-        BPMTE.setColour(TextEditor::focusedOutlineColourId, Colours::transparentBlack);
-
         outputDirTE.setColour(TextEditor::outlineColourId, Colours::transparentBlack);
         outputDirTE.setColour(TextEditor::backgroundColourId, Colours::transparentBlack);
         outputDirTE.setColour(TextEditor::focusedOutlineColourId, Colours::transparentBlack);
 
         //FONTS
-        auto myFont = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
-        LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypeface(myFont);
-        Font cfont = Font(myFont);
-        cfont.setHeight(cfont.getHeight() * 0.8f);
-        resolution.setFont(cfont.withExtraKerningFactor(0.15f));
-        rate.setFont(cfont.withExtraKerningFactor(0.15f));
-        beats.setFont(cfont.withExtraKerningFactor(0.15f));
-        sensitivity.setFont(cfont.withExtraKerningFactor(0.15f));
-        value.setFont(cfont.withExtraKerningFactor(0.15f));
-        bitdepth.setFont(cfont.withExtraKerningFactor(0.095f));
-        outpath.setFont(cfont.withExtraKerningFactor(0.095f));
+        auto fontTypeFace = Typeface::createSystemTypefaceFor(BinaryData::BebasNeueRegular_ttf, BinaryData::BebasNeueRegular_ttfSize);
+        LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypeface(fontTypeFace);
+        Font font = Font(fontTypeFace);
+        font.setHeight(font.getHeight() * 0.8f);
+        resolution.setFont(font.withExtraKerningFactor(0.15f));
+        rate.setFont(font.withExtraKerningFactor(0.15f));
+        beats.setFont(font.withExtraKerningFactor(0.15f));
+        sensitivity.setFont(font.withExtraKerningFactor(0.15f));
+        value.setFont(font.withExtraKerningFactor(0.15f));
+        bitdepth.setFont(font.withExtraKerningFactor(0.095f));
+        outpath.setFont(font.withExtraKerningFactor(0.095f));
         resolution.setFont(25);
         rate.setFont(25);
         beats.setFont(25);
@@ -550,28 +521,27 @@ public:
         gainTextRight.setFont(18);
         gainTextLeft.setFont(18);
         outputDirTE.setFont(23);
-        BPMTE.setFont(25);
-        samplerateTE.setFont(25);
+      
 
 
         //PLAY PAUSE STOP BUTTONS
         std::unique_ptr<Drawable> play_image(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
         std::unique_ptr<Drawable> play_over(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
         std::unique_ptr<Drawable> play_dis(Drawable::createFromImageData(BinaryData::play_svg, BinaryData::play_svgSize));
-        play_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
-        play_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
+        play_image->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
+        play_dis->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
         play_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
         std::unique_ptr<Drawable> stop_image(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
         std::unique_ptr<Drawable> stop_over(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
         std::unique_ptr<Drawable> stop_dis(Drawable::createFromImageData(BinaryData::stop_svg, BinaryData::stop_svgSize));
-        stop_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
-        stop_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
+        stop_image->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
+        stop_dis->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
         stop_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
         std::unique_ptr<Drawable> pause_image(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
         std::unique_ptr<Drawable> pause_over(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
         std::unique_ptr<Drawable> pause_dis(Drawable::createFromImageData(BinaryData::pause_svg, BinaryData::pause_svgSize));
-        pause_image->replaceColour(Colours::black, c.fromRGB(38, 46, 57).withAlpha(0.5f));
-        pause_dis->replaceColour(Colours::black, c.fromRGB(60, 67, 77).withAlpha(0.5f));
+        pause_image->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
+        pause_dis->replaceColour(Colours::black, Colour(33, 44, 49).withAlpha(0.5f));
         pause_over->replaceColour(Colours::black, Colours::orange.withAlpha(0.5f));
         playImageButton.setImages(play_image.get(), play_over.get(), play_over.get(), play_dis.get(), play_over.get(), play_over.get(), play_over.get(), play_dis.get());
         stopImageButton.setImages(stop_image.get(), stop_over.get(), stop_over.get(), stop_dis.get(), stop_over.get(), stop_over.get(), stop_over.get(), stop_dis.get());
@@ -586,9 +556,8 @@ public:
          
         //PREPARE
         if (!dtc.getLastDroppedFile().isEmpty()) {
-            dtc.drawLevel(sGain.getValue(), maxChannel); specificGrid(); specificPeaks();}
-       
-        atStarting();
+            dtc.drawLevel(sGainRight.getValue(), maxChannel); specificGrid(); specificPeaks();}
+    
 
     }
 
@@ -604,11 +573,11 @@ public:
             if (isWav) {
 
                 if (dtc.isCreated) {
-                    initSample = initPeak((BPMTE.getText()).getIntValue(), (samplerateTE.getText()).getIntValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
+                    initSample = initPeak(BPMSlider.getValue(), rateSlider.getValue(), getResolutionIndex(), dtc.getLastDroppedFile().getLocalFile());
                     dtc.isCreated = false;
                 }
 
-                dtc.drawLevel(sGain.getValue(), maxChannel);
+                dtc.drawLevel(sGainRight.getValue(), maxChannel);
                 playImageButton.setEnabled(true);
                 stopImageButton.setEnabled(true);
                 pauseImageButton.setEnabled(true);
@@ -636,7 +605,7 @@ public:
 
             }
 
-            sGain.setValue(0);
+            sGainRight.setValue(0);
         }
 
 
@@ -653,8 +622,8 @@ public:
 
      bool checkInputParams() {
 
-         auto r = samplerateTE.getText().getIntValue();
-         auto b = BPMTE.getText().getIntValue();
+         auto r = rateSlider.getValue();
+         auto b = BPMSlider.getValue();
          auto transientCheck = tci.size() > 0;
 
          if (1==1) {
@@ -840,50 +809,41 @@ public:
         String fname = fileName.getFileName();
         bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
         if (!isWav) return;
-       
-       
+      
         AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
         AudioFormat* audioFormat = formatManager.getDefaultFormat();
         AudioFormatReader* reader = formatManager.createReaderFor(fileName);
-       
       
         WavAudioFormat format;
         std::unique_ptr<AudioFormatWriter> writer;
         writer.reset(format.createWriterFor(new FileOutputStream(File(newFileName), reader->lengthInSamples), samplerate, 2, 16, {}, 0));
 
-
-
+        AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
+        AudioSampleBuffer* pivot = new AudioBuffer<float>(2, reader->lengthInSamples);
+        buffer->clear();
+        pivot->clear();
+        reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
+        int current = 0, tot = reader->lengthInSamples;
        
-            AudioSampleBuffer* buffer = new AudioBuffer<float>(2, reader->lengthInSamples);
-            AudioSampleBuffer* pivot = new AudioBuffer<float>(2, reader->lengthInSamples);
-            buffer->clear();
-            pivot->clear();
-            reader->read(buffer, 0, buffer->getNumSamples(), 0, true, true);
-            int current = 0, tot = reader->lengthInSamples;
-        
-            /*    ofstream myfile;
-    myfile.open("example9.txt");
-    myfile << (String)tci.size()   + "\n";*/
-
             for (int i = 0; i < tci.size(); i++) {
            
-            bool anticipo = tci.operator[](i)->getAnticipo();
-            int tpk = tci.operator[](i)->getTPK();
-            int tbk = tci.operator[](i)->getTBK();
-            int fd = tci.operator[](i)->getFade();
-            float fd_square = fd * fd;
-            int delta = tci.operator[](i)->getDelta();
-            int starting = tpk - fd - delta;
+                auto anticipo = tci.operator[](i)->getAnticipo();
+                auto tpk = tci.operator[](i)->getTPK();
+                auto tbk = tci.operator[](i)->getTBK();
+                auto fd = tci.operator[](i)->getFade();
+                float fd_square = fd * fd;
+                auto delta = tci.operator[](i)->getDelta();
+                auto starting = tpk - fd - delta;
          
-            bool anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->getAnticipo();
-            int tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTPK();
-            int tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTBK();
-            int fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->getFade() :tci.operator[](i+1)->getFade();
-            int delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->getDelta() :tci.operator[](i+1)->getDelta();
-            int middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
+                auto anticipo_1 = i==(tci.size()-1)? false : tci.operator[](i + 1)->getAnticipo();
+                auto tpk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTPK();
+                auto tbk_1 = i == (tci.size() - 1) ? reader->lengthInSamples : tci.operator[](i + 1)->getTBK();
+                auto fd_1 = i == (tci.size() - 1) ? tci.operator[](i)->getFade() :tci.operator[](i+1)->getFade();
+                auto delta_1 = i == (tci.size() - 1) ? tci.operator[](i)->getDelta() :tci.operator[](i+1)->getDelta();
+                auto middle = i == (tci.size() - 1) ? floor((float)(tbk + reader->lengthInSamples) / 2.0f) - tbk : floor((float)(tbk + tpk_1) / 2.0f) - tbk;
             
-            if(anticipo && anticipo_1){
+                if(anticipo && anticipo_1){
                          
                          for(int u =0; u< pivot->getNumChannels(); u++)
                             pivot->copyFrom(u, 0, *buffer, u, tpk, tpk_1- delta - tpk);
@@ -897,17 +857,17 @@ public:
                          writer->writeFromAudioSampleBuffer(*pivot, 0,delta_1);
                          pivot->clear();
             
-            }
-            else if(anticipo && !anticipo_1){
+                }
+                else if(anticipo && !anticipo_1){
                 
-                 for(int u =0; u< pivot->getNumChannels(); u++)
+                  for(int u =0; u< pivot->getNumChannels(); u++)
                             pivot->copyFrom(u, 0, *buffer, u, tpk, tbk_1- delta - tpk);
                              
                          writer->writeFromAudioSampleBuffer(*pivot, 0, tbk_1 - delta-tpk);
                          pivot->clear();
                          
-            }
-            else if(!anticipo && anticipo_1){
+                }
+                else if(!anticipo && anticipo_1){
                 
                     for(int u =0; u< pivot->getNumChannels(); u++)
                             pivot->copyFrom(u, 0, *buffer, u, tpk, tpk_1 - tpk);
@@ -922,10 +882,10 @@ public:
                          pivot->clear();
                 
             
-            }
-            else if(!anticipo && !anticipo_1){
+                }
+                else if(!anticipo && !anticipo_1){
             
-                for(int u =0; u< pivot->getNumChannels(); u++)
+                    for(int u =0; u< pivot->getNumChannels(); u++)
                             pivot->copyFrom(u, 0, *buffer, u, tpk, tbk_1 - tpk);
                              
                          writer->writeFromAudioSampleBuffer(*pivot, 0, tbk_1 - tpk);
@@ -937,11 +897,10 @@ public:
                          writer->writeFromAudioSampleBuffer(*pivot, 0, delta);
                          pivot->clear();
             
-            }
+                }
                 
             }
-
-            
+       
   }
 
 
@@ -1039,7 +998,7 @@ public:
        float thresholdTimeSpan, float thresholdMultiplier)
    {
       
-       float sourceTimeSpan = (float)(sampleWindow) / (float)(samplerateTE.getText()).getIntValue();
+       float sourceTimeSpan = (float)(sampleWindow) / (float)rateSlider.getValue();
        int windowSize = (int)(thresholdTimeSpan / sourceTimeSpan / 2);
 
        for (int i = 0; i < fluxes.size(); i++)
@@ -1073,7 +1032,7 @@ public:
        const float indistinguishableRange = 0.01f; 
        
        int immunityPeriod = (int)((float)sampleCount
-           / (float)(samplerateTE.getText()).getIntValue()
+           / (float)rateSlider.getValue()
            / indistinguishableRange);
 
       
@@ -1187,8 +1146,8 @@ public:
        }
 
 
-       auto rate = (samplerateTE.getText()).getIntValue();
-       auto BPM = (BPMTE.getText()).getIntValue();
+       auto rate = rateSlider.getValue();
+       auto BPM = BPMSlider.getValue();
        tci.clear();
        
        
@@ -1264,17 +1223,6 @@ private:
     };
 
 
-    void atStarting() {
-
-        if(firstTimeStarted){
-        BPMTE.setText("120", dontSendNotification);
-        samplerateTE.setText("44100", dontSendNotification);
-        gainTextRight.setText("", dontSendNotification);
-        gainTextLeft.setText("", dontSendNotification);
-        firstTimeStarted = false;
-        }
-    }
-   
 
 
     void playButtonClicked()
@@ -1314,15 +1262,18 @@ private:
     void timerCallback() override
     {
 
-          
+        auto value = std::sin((++sinCounter)/10.0*PI_GREEK);
+        sensitivity.setColour(Label::textColourId, Colour(38, 46, 57).brighter(0.8f*value));
+        sinCounter = (sinCounter == 10) ? 0: sinCounter;
+
        if(dtc.isDown)
           {
 
             if(!deleteButton.getToggleState()){
                 
-                auto start = dtc.peakMarkers.getLast()->getSample() * (samplerateTE.getText()).getIntValue();
-                auto rate = (samplerateTE.getText()).getIntValue();
-                auto BPM = (BPMTE.getText()).getIntValue();
+                auto start = dtc.peakMarkers.getLast()->getSample() * rateSlider.getValue();
+                auto rate = rateSlider.getValue();
+                auto BPM = BPMSlider.getValue();
 
                 peaks.add(new DummyFLoat(1, (int)(start/(float)fftSize),true));
                 tci.add(new TimeContainerInfo(start,getClosestBeat(BPM,rate, getResolutionIndex(), start,true)));
@@ -1348,7 +1299,7 @@ private:
 
     void removeTransient(float transientToDelete) {
 
-        auto srate = (samplerateTE.getText()).getIntValue();
+        auto srate = rateSlider.getValue();
         int difference = 1000000;
         auto current = srate * transientToDelete;
         int found = -1;
@@ -1401,14 +1352,14 @@ private:
     DrawableButton stopImageButton;
     DrawableButton pauseImageButton;
 
-    Slider s,sGain,sGainLeft, peakSensitivity, rateSlider, BPMSlider;
+    Slider s,sGainRight,sGainLeft, peakSensitivity, rateSlider, BPMSlider;
     ComboBox resolutionCbox {"combo"};
     ComboBox bitsCbox{ "bits" };
    
     Label resolution, rate, beats, bitdepth, outpath, gainTextRight, gainTextLeft, sensitivity, value;
     ToggleButton useTriplets;
 
-    TextEditor samplerateTE, BPMTE, outputDirTE;
+    TextEditor outputDirTE;
     GroupComponent InputGroup, TransientGroup, OutputGroup;
 
    
@@ -1422,6 +1373,7 @@ private:
     AudioThumbnailCache thumbnailCache;
     int numTransient=0;
     int initSample=0;
+    int sinCounter = 0;
     juce::int64 audioLen = 0;
     DemoThumbnailComp dtc;
     String outPath = File::getCurrentWorkingDirectory().getFullPathName();
@@ -1445,6 +1397,8 @@ private:
     OwnedArray<TimeContainerInfo> tci;
     OwnedArray<DrawableRectangle> rect;
    
+    AudioUtils AU;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
 

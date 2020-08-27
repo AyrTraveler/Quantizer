@@ -87,3 +87,82 @@ private:
     bool isUserTransient = false;
 };
 
+
+class AudioUtils {
+
+public:
+
+    AudioUtils() { ; }
+
+private:
+
+    float detectMax(File file) {
+
+        String fname = file.getFileName();
+        bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
+        if (!isWav) return 0.0f;
+
+        AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+        AudioFormatReader* reader = formatManager.createReaderFor(file);
+        float minR, maxR, minL, maxL;
+       
+        reader->readMaxLevels(0, reader->lengthInSamples, minR, maxR, minL, maxL);
+        return maxL;
+
+    }
+
+    int audioLen(File file) {
+
+        String fname = file.getFileName();
+        bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
+
+        if (!isWav) return 0.0f;
+
+        AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+        AudioFormatReader* reader = formatManager.createReaderFor(file);
+        return reader->lengthInSamples;
+
+    }
+
+    int initPeak(int BPM, int samplerate, float divider, File file) {
+
+
+        String fname = file.getFileName();
+        bool isWav = fname.contains(".wav") || fname.contains(".Wav") || fname.contains(".WAV");
+
+        if (!isWav) return 0;
+
+        bool checkBPM = BPM > 35 && BPM < 210;
+        bool checkSR = samplerate >= 44100 && samplerate < 200000;
+        bool checkDiv = ((int)divider % 2 == 0 && divider <= 4) || divider == 0.5f;
+
+        if (!checkBPM || !checkDiv || !checkSR ) return 0;
+
+
+        const float threshold = 0.04f;
+
+        AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+        AudioFormat* audioFormat = formatManager.getDefaultFormat();
+        AudioFormatReader* reader = formatManager.createReaderFor(file);
+
+
+        int k = 0;
+
+
+        AudioSampleBuffer* bufferTemp = new AudioBuffer<float>(2, samplerate * 5);
+
+        reader->read(bufferTemp, 0, bufferTemp->getNumSamples(), 0, true, true);
+        float const* samples = bufferTemp->getReadPointer(0);
+        while (fabs(samples[k]) < threshold) k += 1;
+
+
+        return k;
+
+
+    }
+
+};
+

@@ -129,7 +129,7 @@ public:
 
         Colour c;
 
-        g.fillAll(c.fromRGB(8,9,10));
+        g.fillAll(c.fromRGB(16,17,19).darker(0.8f));
 
         g.setColour((Colours::orange).withAlpha(0.5f));
 
@@ -158,7 +158,7 @@ public:
     {
         scrollbar.setBounds(getLocalBounds().removeFromBottom(14).reduced(2));
         Colour c;
-        scrollbar.setColour(scrollbar.thumbColourId, c.fromRGB(38, 46, 57).darker(0.5f));
+        scrollbar.setColour(scrollbar.thumbColourId, c.fromRGB(38, 46, 57).darker(0.1f));
 
 
     }
@@ -390,6 +390,8 @@ private:
         else
             setRange(visibleRange.movedToStartAt(transportSource.getCurrentPosition() - (visibleRange.getLength() / 2.0)));
 
+
+       
 
     }
 

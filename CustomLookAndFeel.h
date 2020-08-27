@@ -32,7 +32,7 @@ struct CustomLookAndFeel : public LookAndFeel_V4
         {
             g.setColour(component.findColour(ToggleButton::tickColourId));
             auto tick = getTickShape(0.75f);
-            g.fillPath(tick, tick.getTransformToScaleToFit(tickBounds.reduced(4, 5).toFloat(), false));
+            g.fillPath(tick, tick.getTransformToScaleToFit(tickBounds.reduced(5, 6).toFloat(), false));
         }
     }
 
@@ -164,7 +164,9 @@ struct CustomLookAndFeel : public LookAndFeel_V4
     {
         if (slider.isBar())
         {
-            g.setColour(slider.findColour(Slider::trackColourId));
+            Colour c;
+            g.setColour(c.fromRGB(71, 74, 79));
+            //g.setColour(slider.findColour(Slider::trackColourId).brighter(0.05));
             g.fillRect(slider.isHorizontal() ? Rectangle<float>(static_cast<float> (x), y + 0.5f, sliderPos - x, height - 1.0f)
                 : Rectangle<float>(x + 0.5f, sliderPos, width - 1.0f, y + (height - sliderPos)));
         }
@@ -186,7 +188,7 @@ struct CustomLookAndFeel : public LookAndFeel_V4
             backgroundTrack.lineTo(endPoint);
 //            g.setColour(slider.findColour(Slider::backgroundColourId));
             Colour c;
-            g.setColour(c.fromRGB(38, 46, 57).darker(0.5f));
+            g.setColour(c.fromRGB(71, 74, 79));
             g.strokePath(backgroundTrack, { trackWidth, PathStrokeType::curved, PathStrokeType::rounded });
 
             Path valueTrack;
@@ -219,7 +221,7 @@ struct CustomLookAndFeel : public LookAndFeel_V4
             valueTrack.lineTo(isThreeVal ? thumbPoint : maxPoint);
            // g.setColour(slider.findColour(Slider::trackColourId));
            
-            g.setColour(c.fromRGB(38, 46, 57).brighter(0.1f));
+            g.setColour(c.fromRGB(71, 74, 79).darker(0.4f));
             g.strokePath(valueTrack, { trackWidth, PathStrokeType::curved, PathStrokeType::rounded });
 
             if (!isTwoVal)
@@ -262,8 +264,8 @@ struct CustomLookAndFeel : public LookAndFeel_V4
             const float rotaryStartAngle, const float rotaryEndAngle, Slider& slider)
         {
            // auto outline = slider.findColour(Slider::rotarySliderOutlineColourId);
-            auto outline = Colour(38, 46, 57).darker(0.5f);
-            auto fill = Colour(38, 46, 57).brighter(0.1f);
+            auto outline = Colour(71, 74, 79).darker(0.4f);
+            auto fill = Colour(71, 74, 79);
            // auto fill = slider.findColour(Slider::rotarySliderFillColourId);
 
             auto bounds = Rectangle<int>(x, y, width, height).toFloat().reduced(10);
@@ -392,6 +394,111 @@ struct CustomLookAndFeel : public LookAndFeel_V4
         }
 
         Font getAlertWindowMessageFont() override { return { 20.0f }; }
+
+
+        Label* createSliderTextBox(Slider& slider) override
+        {
+            auto* l = LookAndFeel_V2::createSliderTextBox(slider);
+
+            if (getCurrentColourScheme() == LookAndFeel_V4::getGreyColourScheme() && (slider.getSliderStyle() == Slider::LinearBar
+                || slider.getSliderStyle() == Slider::LinearBarVertical))
+            {
+                l->setColour(Label::textColourId, Colours::black.withAlpha(0.7f));
+            }
+
+            l->setColour(Label::outlineWhenEditingColourId, Colours::transparentBlack);
+            l->setFont(25);
+
+            return l;
+        }
+
+        void drawPopupMenuItem(Graphics& g, const Rectangle<int>& area,
+            const bool isSeparator, const bool isActive,
+            const bool isHighlighted, const bool isTicked,
+            const bool hasSubMenu, const String& text,
+            const String& shortcutKeyText,
+            const Drawable* icon, const Colour* const textColourToUse) override
+        {
+            if (isSeparator)
+            {
+                auto r = area.reduced(5, 0);
+                r.removeFromTop(roundToInt((r.getHeight() * 0.5f) - 0.5f));
+
+                g.setColour(findColour(PopupMenu::textColourId).withAlpha(0.3f));
+                g.fillRect(r.removeFromTop(1));
+            }
+            else
+            {
+                auto textColour = (textColourToUse == nullptr ? findColour(PopupMenu::textColourId)
+                    : *textColourToUse);
+
+                auto r = area.reduced(1);
+
+                if (isHighlighted && isActive)
+                {
+                    g.setColour(findColour(PopupMenu::highlightedBackgroundColourId));
+                    g.fillRect(r);
+
+                    g.setColour(findColour(PopupMenu::highlightedTextColourId));
+                }
+                else
+                {
+                    g.setColour(textColour.withMultipliedAlpha(isActive ? 1.0f : 0.5f));
+                }
+
+                r.reduce(jmin(5, area.getWidth() / 20), 0);
+
+                auto font = Font(20);
+
+                auto maxFontHeight = r.getHeight() / 1.3f;
+
+                if (font.getHeight() > maxFontHeight)
+                    font.setHeight(maxFontHeight);
+
+                g.setFont(font);
+
+                auto iconArea = r.removeFromLeft(roundToInt(maxFontHeight)).toFloat();
+
+                if (icon != nullptr)
+                {
+                    icon->drawWithin(g, iconArea, RectanglePlacement::centred | RectanglePlacement::onlyReduceInSize, 1.0f);
+                    r.removeFromLeft(roundToInt(maxFontHeight * 0.5f));
+                }
+                else if (isTicked)
+                {
+                    auto tick = getTickShape(1.0f);
+                    g.fillPath(tick, tick.getTransformToScaleToFit(iconArea.reduced(iconArea.getWidth() / 5, 0).toFloat(), true));
+                }
+
+                if (hasSubMenu)
+                {
+                    auto arrowH = 0.6f * getPopupMenuFont().getAscent();
+
+                    auto x = static_cast<float> (r.removeFromRight((int)arrowH).getX());
+                    auto halfH = static_cast<float> (r.getCentreY());
+
+                    Path path;
+                    path.startNewSubPath(x, halfH - arrowH * 0.5f);
+                    path.lineTo(x + arrowH * 0.6f, halfH);
+                    path.lineTo(x, halfH + arrowH * 0.5f);
+
+                    g.strokePath(path, PathStrokeType(2.0f));
+                }
+
+                r.removeFromRight(3);
+                g.drawFittedText(text, r, Justification::centred, 1);
+
+                if (shortcutKeyText.isNotEmpty())
+                {
+                    auto f2 = font;
+                    f2.setHeight(f2.getHeight() * 0.75f);
+                    f2.setHorizontalScale(0.95f);
+                    g.setFont(f2);
+
+                    g.drawText(shortcutKeyText, r, Justification::centredRight, true);
+                }
+            }
+        }
 
 };
 
